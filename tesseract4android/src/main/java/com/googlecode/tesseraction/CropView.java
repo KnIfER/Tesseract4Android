@@ -71,7 +71,7 @@ public class CropView extends View {
 	private int mGridShowType = 0;
 	
 	/** 外部触摸处理方式 0=不处理，1=移动/缩放背后的view，2=拖动边框的某一边，3=移动边框 */
-	private int mOutTouchMode = 1;
+	private int mOutTouchMode = 3;
 	
 	/** 双指操作时，储存第二指的ID。安卓多点触摸，落点 index 会变化，而 ID 不变。  */
 	private int PinchTouchId;
@@ -88,10 +88,10 @@ public class CropView extends View {
 	public ArrayList<Rect> possibleTextRects;// = new ArrayList<>(256);
 	private final List<ResultPoint> lastPossibleResultPoints = new ArrayList<>(5);
 	
-	public int laserTop;
 	
 	private final Paint paint;
 	Bitmap laserBit;
+	private int laserTop;
 	private RectF laserRect = new RectF();
 	private int lowerLaserLimit;
 	
@@ -186,10 +186,8 @@ public class CropView extends View {
 				if(drawLaser) {
 					// laser blade hen hen hah hyi！
 					lowerLaserLimit = (int) (frame.bottom-15);
-					
 					drawLaser(canvas, frame);
-					
-					if(laserTop ==lowerLaserLimit) {
+					if(laserTop==lowerLaserLimit) {
 						laserTop =(int) frame.top;
 						//delay=350L;
 						delay=650L;
@@ -197,7 +195,6 @@ public class CropView extends View {
 				} else {
 					delay = 160L;
 				}
-				
 				if(drawLocations && delay<300) {
 					// 绘制点云
 					synchronized (possibleResultPoints) {
@@ -212,7 +209,6 @@ public class CropView extends View {
 						}
 					}
 				}
-				
 				ArrayList<Rect> rects = possibleTextRects;
 				if(rects!=null) {
 					float frameHeightPlusLeft = frame.left+frame.height();
@@ -240,7 +236,6 @@ public class CropView extends View {
 					}
 					//CMN.Log("rects.size()::", rects.size());
 				}
-				
 				if(animating&&(drawLocations||drawLaser)) {
 					// Request another update at the animation interval
 					// , but only repaint the laser line, not the entire viewfinder mask.
@@ -695,7 +690,6 @@ public class CropView extends View {
 	
 	public void suspense() {
 		animating=false;
-		laserTop =(int) (frameOffsets.top+frameOffsets.height()/2);
 		invalidate();
 	}
 	
@@ -755,21 +749,20 @@ public class CropView extends View {
 	
 	private void drawLaser(Canvas canvas, RectF frame) {
 		//CMN.Log("drawScanLight", scanLineTop);
+		if(!animating) {
+			laserTop =(int) (frameOffsets.top+frameOffsets.height()/2);
+		}
 		if (laserTop == 0) {
 			laserTop = (int) frame.top;
 		}
-		
 		if(animating) {
 			laserTop += SCAN_VELOCITY;
 		}
-		
 		if (laserTop >= lowerLaserLimit-5) {
 			laserTop = lowerLaserLimit;
 			return;
 		}
-		
 		laserRect.set(frame.left, laserTop, frame.right, laserTop + 30);
-		
 		canvas.drawBitmap(laserBit, null, laserRect, paint);
 	}
 }

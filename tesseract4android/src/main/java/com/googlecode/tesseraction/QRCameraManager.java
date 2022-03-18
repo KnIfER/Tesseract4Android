@@ -185,6 +185,7 @@ public final class QRCameraManager implements SensorEventListener {
 		imageListener.ready();
 	}
 	
+	//todo opt
 	public void decorateCameraSettings() {
 		Camera decor_camera = camera;
 		if(decor_camera!=null) {
@@ -193,10 +194,15 @@ public final class QRCameraManager implements SensorEventListener {
 				params = parameters = decor_camera.getParameters();
 			}
 			setBestExposure(params, true);
-			setTorch(params, a.suspensed?a.isTorchLighting:a.opt.getTorchLight());
+			setTorch(params, a.opt.getTorchLight());
 			//setBestPreviewFPS(params);
 			//setBarcodeSceneMode(params);
 			decor_camera.setParameters(params);
+			if(!previewing) {
+				// it's a feature!
+				decor_camera.startPreview();
+				decor_camera.stopPreview();
+			}
 		}
 	}
 	
@@ -279,6 +285,7 @@ public final class QRCameraManager implements SensorEventListener {
 		if (camera != null) {
 			previewing = false;
 			imageListener.stop();
+			decorateCameraSettings();
 			try {
 				camera.stopPreview();
 			} catch (Exception e) {
@@ -286,6 +293,10 @@ public final class QRCameraManager implements SensorEventListener {
 			}
 		}
 		pauseSensor();
+	}
+	
+	public boolean isPreviewing() {
+		return previewing;
 	}
 	
 	/** A single preview frame will be returned to the handler supplied. The data will arrive as byte[] in the message.obj field */

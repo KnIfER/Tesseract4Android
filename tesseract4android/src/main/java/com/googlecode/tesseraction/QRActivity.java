@@ -4,7 +4,9 @@ import android.Manifest;
 import android.animation.Keyframe;
 import android.animation.ObjectAnimator;
 import android.animation.PropertyValuesHolder;
+import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
@@ -114,7 +116,6 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 	ActivityQrBinding UIData;
 	
 	public boolean suspensed;
-	public boolean isTorchLighting;
 	private boolean systemIntialized;
 	private boolean requestedResetHints;
 	
@@ -178,9 +179,9 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 		setOnClickListenersOneDepth(UIData.toolbarContent, this, 1);
 		setOnClickListenersOneDepth((ViewGroup)UIData.toast, this, 1);
 		
-		if(opt.getLaunchCameraType()==2&&opt.getRememberedLaunchCamera()) {
-			ui_camera_btn_vis(2);
-		}
+//		if(opt.getLaunchCameraType()==2&&opt.getRememberedLaunchCamera()) {
+//			ui_camera_btn_vis(2);
+//		}
 		
 		UIData.tv1.setOnClickListener(this);
 		
@@ -215,6 +216,8 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 		updateOrientation();
 		
 		systemIntialized=true;
+		
+		refreshUI();
 	}
 	
 	private void updateOrientation() {
@@ -226,7 +229,7 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 	
 	private void suspenseCameraUI() {
 		qr_frame.suspense();
-		updateTorchLight(false);
+		refreshUI();
 		syncQRFrameSettings(true);
 		UIData.tv1.setVisibility(View.VISIBLE);
 //		((ViewGroup.MarginLayoutParams)UIData.tv1.getLayoutParams())
@@ -245,10 +248,20 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 		}
 	}
 	
+	int[] UIStates = new int[15];
+	private void refreshUI() {
+		int alpha=cameraManager.isPreviewing()?255:128;
+		if(UIStates[0]!=alpha) {
+			UIData.camera.getDrawable().setAlpha(alpha);
+			UIStates[0]=alpha;
+		}
+		
+//		LayerDrawable ld = (LayerDrawable) UIData.torch.getDrawable();
+//		ld.getDrawable(0).setAlpha(torchLight?255:64);
+//		ld.getDrawable(1).setAlpha(torchLight?255:128);
+	}
+	
 	private void updateTorchLight(boolean torchLight) {
-		LayerDrawable ld = (LayerDrawable) UIData.torch.getDrawable();
-		ld.getDrawable(0).setAlpha(torchLight?255:64);
-		ld.getDrawable(1).setAlpha(torchLight?255:128);
 	}
 	
 	private void calcScreenOrientation() {
@@ -511,10 +524,7 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 		UIData.tv1.setVisibility(View.GONE);
 		suspensed=false;
 		qr_frame.resume();
-		isTorchLighting=false;
 		syncQRFrameSettings(true);
-		updateTorchLight(opt.getTorchLight());
-		
 		if(handlerThread==null) {
 			handlerThread = new DecodeThread(this);
 			handlerThread.start();
@@ -523,7 +533,6 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 		if(surfaceView==null) {
 			//handler = new QRActivityHandler(this, cameraManager);
 			// The prefs can't change while the thread is running, so pick them up once here.
-			
 			setHints();
 			
 			video_surface_frame = findViewById(R.id.video_surface_frame);
@@ -542,17 +551,14 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 					public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surface, int width, int height) {
 						init_camera();
 					}
-					
 					@Override
 					public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture surface, int width, int height) {
 					}
-					
 					@Override
 					public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surface) {
 						CMN.Log("onSurfaceTextureDestroyed");
 						return false;
 					}
-					
 					@Override
 					public void onSurfaceTextureUpdated(@NonNull SurfaceTexture surface) {
 					}
@@ -562,6 +568,7 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 		else {
 			resumeCamera();
 		}
+		refreshUI();
 	}
 	
 	private void setHints() {
@@ -732,15 +739,15 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 		}
 	}
 	
+	@SuppressLint("NonConstantResourceId")
 	@Override
 	public void onClick(View v) {
 		switch (v.getId()) {
 			case R.id.tv1:{
-				openCamera();
-				if(opt.getLaunchCameraType()==2) {
-					ui_camera_btn_vis(2);
-					opt.setRememberedLaunchCamera(true);
-				}
+//					ui_camera_btn_vis(2);
+//					opt.setRememberedLaunchCamera(true);
+				resumeCamera();
+				refreshUI();
 			} break;
 			case R.id.folder:{
 				Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -752,40 +759,34 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 				}
 			} break;
 			case R.id.camera:{
-				close_camera();
-				ui_camera_btn_vis(0);
+				if(cameraManager.isPreviewing()) {
+					suspensed = true;
+					pauseCamera();
+				} else {
+					suspensed = false;
+					resumeCamera();
+				}
+				refreshUI();
 				opt.setRememberedLaunchCamera(false);
 			} break;
 			case R.id.ivBack:{
 				finish();
 			} break;
 			case R.id.torch: {
-				if(suspensed) {
-					isTorchLighting=!isTorchLighting;
-					updateTorchLight(isTorchLighting);
-					if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-						CameraManager camManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-						try {
-							camManager.setTorchMode(camManager.getCameraIdList()[0], isTorchLighting);
-						} catch (Exception e) {
-							//CMN.Log(e);
-						}
-					} else {
-						if(!cameraManager.isOpen()) {
-							try {
-								cameraManager.open();
-							} catch (IOException e) {
-								//CMN.Log(e);
-							}
-						}
-						if(cameraManager.isOpen()) {
-							cameraManager.decorateCameraSettings();
-						}
-					}
-				} else {
-					updateTorchLight(opt.toggleTorchLight());
+				if(cameraManager.isOpen()) {
+					opt.toggleTorchLight();
 					cameraManager.decorateCameraSettings();
+					refreshUI();
 				}
+			} break;
+			case R.id.title: {
+				new AlertDialog.Builder(this)
+						.setSingleChoiceItems(new CharSequence[]{
+								"二维码"
+								, "文本识别"
+						}, -1, null)
+						.setTitle("选择扫描方式")
+						.show();
 			} break;
 //			case R.id.tools:{
 //				pauseCamera();
