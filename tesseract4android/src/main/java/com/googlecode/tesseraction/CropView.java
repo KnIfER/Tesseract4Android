@@ -97,6 +97,7 @@ public class CropView extends View {
 	
 	public boolean drawLocations;
 	public boolean drawLaser;
+	public boolean drawCrossSight = true;
 	
 	private ResultPointCollector mResultPointCollector;
 	
@@ -168,6 +169,7 @@ public class CropView extends View {
 		
 		canvas.drawRect(frameOffsets, framePaint);
 		canvas.drawRect(frameOffsets, cropPaint);
+		
 		
 		{
 			RectF frame = frameOffsets; // 取景框
@@ -247,13 +249,24 @@ public class CropView extends View {
 		}
 		
 		final int temp1 = (mCornerStrokeWidth - mBorderStrokeWidth) / 2;
-		// 画方框的角
+		// 画准星与方框的角
 		{
+			float x,y;
+			if(drawCrossSight) {
+				framePaint.setStrokeWidth(mCornerStrokeWidth/3);
+				int tmp = mCornerSize / 2;
+				x = frameOffsets.left + frameOffsets.width() / 2 - tmp;
+				y = frameOffsets.top + frameOffsets.height() / 2;
+				canvas.drawLine(x, y, x+mCornerSize, y, framePaint);
+				x += tmp;
+				y -= tmp;
+				canvas.drawLine(x, y, x, y+mCornerSize, framePaint);
+			}
+			
 			final int temp2 = (mCornerStrokeWidth + mBorderStrokeWidth) / 2;
-			framePaint.setStrokeWidth(mCornerStrokeWidth);
 			final int temp3 = temp1-temp2;
 			float sizeX=mCornerSize-temp1,sizeY=temp2+sizeX;
-			float x,y;
+			framePaint.setStrokeWidth(mCornerStrokeWidth);
 			//左上横
 			x=frameOffsets.left;
 			y=frameOffsets.top-temp1;
@@ -304,6 +317,7 @@ public class CropView extends View {
 					, frameOffsets.right - temp1 , frameOffsets.bottom - temp2
 					, framePaint);
 		}
+		
 	}
 	
 	/** 上次按下的X、Y位置 */

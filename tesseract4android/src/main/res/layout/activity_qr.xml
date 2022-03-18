@@ -125,19 +125,24 @@
 			android:padding="12dp"
 			android:tint="#333"
 			/>
-		<TextView
-			android:id="@+id/toast_tv"
+		<ScrollView
 			android:layout_width="0dp"
 			android:layout_weight="1"
 			android:layout_height="match_parent"
-			android:layout_gravity="center_horizontal"
-			style="@style/SearchbarMenuTextStyle"
-			android:textSize="17sp"
-			android:gravity="left|center_vertical"
-			android:text="asdsaasd\nsdasdada"
-			android:singleLine="false"
-			android:textColor="#000"
-			/>
+			>
+			<TextView
+				android:id="@+id/toast_tv"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:minHeight="75dp"
+				style="@style/SearchbarMenuTextStyle"
+				android:textSize="17sp"
+				android:gravity="left|center_vertical"
+				tools:text="123"
+				android:singleLine="false"
+				android:textColor="#000"
+				/>
+		</ScrollView>
 		<ImageView
 			android:id="@+id/icon_share"
 			android:src="@drawable/ic_baseline_share_24"

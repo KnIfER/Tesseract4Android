@@ -22,7 +22,7 @@ public final class Options {
 	}
 	
 	public final boolean getContinuousFocus(){
-		return false;
+		return true;
 	}
 	public final boolean getLoopAutoFocus(){
 		return false;

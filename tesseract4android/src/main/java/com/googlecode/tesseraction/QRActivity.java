@@ -708,10 +708,11 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 	
 	private ObjectAnimator tada;
 	Runnable PostDisplayResult = () -> {
-		showT(PostResultDisplay);
+		//showT(PostResultDisplay);
+		UIData.toastTv.setTextSize(PostResultDisplay.length()>25?14:17);
 		UIData.toastTv.setText(PostResultDisplay);
 		if(tada==null) {
-			tada=tada(UIData.toast);
+			tada=tada(UIData.iconShare);
 		}
 		//tada.pause();
 		//tada.setCurrentPlayTime(0);
@@ -876,13 +877,15 @@ public /*final*/ class QRActivity extends Activity implements View.OnClickListen
 			//CMN.Log("decode……", CMN.id(data));
 			QRCameraManager camera = a.cameraManager;
 			boolean debugCamera=false;
-			boolean testTesseraction=false;
+			boolean testTesseraction=true;
 			if(!debugCamera && testTesseraction) {
 				// 测试OCR插件！！！
 				if(tess==null) {
 					tess = new TessBaseAPI();
+					Utils.contentResolver = a.getContentResolver();
 					String dataPath = new File(Environment.getExternalStorageDirectory(), "tesseract").getAbsolutePath();
-					tess.init(dataPath, "eng"); //chi_sim
+					tess.init(null, "eng+chi_sim"); //chi_sim
+//					tess.init(dataPath, "chi_sim"); //chi_sim
 					//tess.setImage(data, width, height, );
 					//String text = tess.getUTF8Text();
 				}

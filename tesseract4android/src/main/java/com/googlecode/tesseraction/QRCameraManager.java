@@ -26,6 +26,7 @@ import static com.googlecode.tesseraction.QRCameraUtils.setTorch;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
@@ -45,9 +46,12 @@ import com.google.zxing.LuminanceSource;
 import com.google.zxing.NotFoundException;
 import com.google.zxing.PlanarYUVLuminanceSource;
 import com.google.zxing.Result;
+import com.googlecode.leptonica.android.Pix;
+import com.googlecode.leptonica.android.Pixa;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 
 /** This object wraps the Camera service object and expects to be the only one
  * talking to it. The implementation encapsulates the steps needed to take
@@ -502,6 +506,7 @@ public final class QRCameraManager implements SensorEventListener {
 		}
 		int size=heightheight*widthwidth;
 		byte[] rotatedData = acquireTmpData(size);
+		rotate = false;
 		if (screenRotation == Surface.ROTATION_90) {
 			for(int i=0; i<widthwidth; i++ )
 			{
@@ -532,7 +537,7 @@ public final class QRCameraManager implements SensorEventListener {
 					rotatedData[i+heightheight*j] = data[(j+left)+sWidth*(heightheight-1-i+top)];
 				}
 			}
-			handler.tess.setImage(rotatedData, heightheight, widthwidth, 1, heightheight);
+			rotate=true;
 		}
 		else if (screenRotation == Surface.ROTATION_180) {
 			// 逆时针旋转90°（顺时针270°）
@@ -544,20 +549,78 @@ public final class QRCameraManager implements SensorEventListener {
 					rotatedData[i+heightheight*j] = data[(heightheight-j+left)+sWidth*(heightheight-1-widthwidth+i+top)];
 				}
 			}
-			handler.tess.setImage(rotatedData, heightheight, widthwidth, 1, heightheight);
+			rotate=true;
+			//handler.tess.setImage(rotatedData, heightheight, widthwidth, 1, heightheight);
 		}
+		if(rotate) {
+			int tmp = widthwidth;
+			widthwidth = heightheight;
+			heightheight = tmp;
+		}
+		handler.tess.setImage(rotatedData, widthwidth, heightheight, 1, widthwidth);
 		
+//		CMN.Log("handler.tess.getRegions().size()::", handler.tess.getConnectedComponents().getBoxRects().size());
 		
-//			CMN.Log("handler.tess.getRegions().size()::", handler.tess.getConnectedComponents().getBoxRects().size());
 		
 		try {
 			//handler.activity.get().qr_frame.possibleTextRects = handler.tess.getConnectedComponents().getBoxRects();
-			handler.activity.get().qr_frame.possibleTextRects = handler.tess.getWords().getBoxRects();
+			Pixa words = handler.tess.getWords();
+			
+			ArrayList<Rect> rects = words.getBoxRects();
+			handler.activity.get().qr_frame.possibleTextRects = rects;
+			
+			
 			handler.activity.get().qr_frame.postInvalidate();
+			
+			
+			//handler.activity.get().qr_frame.possibleTextRects = handler.tess.getTextlines().getBoxRects();
+			
+			
+			int cX=widthwidth/2, cY=heightheight/2, dist=Integer.MAX_VALUE, boxIdx=0, boxDist;
+			Rect rc;
+			for (int i = 0; i < rects.size(); i++) {
+				rc = rects.get(i);
+				if(rc.contains(cX, cY)) {
+					boxIdx = i;
+					break;
+				}
+				int d = distSQ(rc.centerX()-cX, rc.centerY()-cY);
+				if(d<dist) {
+					dist = d;
+					boxIdx = i;
+				}
+			}
+			
+			rc=rects.get(boxIdx);
+//			CMN.Log("decoding_ocr_rect::", rc.left, rc.top, rc.width()+"/"+widthwidth, rc.height()+"/"+heightheight);
+			if(rc.width() * rc.height() >= 500*500) {
+				return null;
+			}
+			
+//			Pix pix = words.getPix(boxIdx);
+//			CMN.Log("decoding_ocr_rect::", pix.getData().length);
+//			handler.tess.setImage(pix);
+//			pix.recycle();
+			
+			final int pad = 20;
+			int wordWidth = rc.width()+pad*2;
+			int wordHeight = rc.height()+pad*2;
+			left = rc.left-pad;
+			top = rc.top-pad;
+			byte[] wordData = new byte[wordWidth*wordHeight];
+			for(int i=0; i<wordWidth; i++ )
+			{
+				for(int j=0; j<wordHeight; j++ )
+				{
+					wordData[i+wordWidth*j] = rotatedData[(left+i)+widthwidth*(top+j)];
+				}
+			}
+			handler.tess.setImage(wordData, wordWidth, wordHeight, 1, wordWidth);
+			//Pix.createFromPix(wordData, wordWidth, wordHeight)
 		} catch (Exception e) {
 			CMN.Log(e);
 		}
-		if(true) return null;
+		//if(true) return null;
 		return new Result(handler.tess.getUTF8Text(), null, null, BarcodeFormat.QR_CODE);
 		//source = new PlanarYUVLuminanceSource(data, sWidth, sHeight, left, top,  widthwidth, heightheight, false);
 	}
@@ -583,6 +646,10 @@ public final class QRCameraManager implements SensorEventListener {
 			registeredSensorListener=true;
 			sensorManager.registerListener(this, directionSensor, SensorManager.SENSOR_DELAY_NORMAL);
 		}
+	}
+	
+	private int distSQ(int x, int y) {
+		return x*x+y*y;
 	}
 	
 	public void pauseSensor() {
