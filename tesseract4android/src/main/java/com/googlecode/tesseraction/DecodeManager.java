@@ -87,14 +87,12 @@ public class DecodeManager {
 		}
 		
 		if(left<0) left=0;
-		if(widthwidth+left>sWidth) {
-			widthwidth=sWidth-left;
+		if(widthwidth+left>=sWidth) {
+			widthwidth=sWidth-1-left;
 		}
-		
 		if(top<0) top=0;
-		
-		if(heightheight+top>sHeight) {
-			heightheight=sHeight-top;
+		if(heightheight+top>=sHeight) {
+			heightheight=sHeight-1-top;
 		}
 		
 		if(widthwidth<=0||heightheight<=0) {
@@ -270,37 +268,43 @@ public class DecodeManager {
 	private void decodeBitmap(Bitmap bitmap) {
 		int sWidth=bitmap.getWidth();
 		int sHeight=bitmap.getHeight();
-		
-		RectF rect = framingRect;
-		FrameLayout view = mManager.UIData.surfaceHolder;
-		float scale = fitScale * view.getScaleX();
-		int left=(int)((rect.left - view.getTranslationX())/scale);
-		int top=(int)((rect.top - view.getTranslationY())/scale);
-		int widthwidth=(int)(rect.width()/scale);
-		int heightheight=(int)(rect.height()/scale);
-		if(left<0) left=0;
-		if(widthwidth+left>sWidth) {
-			widthwidth=sWidth-left;
-		}
-		if(top<0) top=0;
-		if(heightheight+top>sHeight) {
-			heightheight=sHeight-top;
-		}
-		if(widthwidth<=0||heightheight<=0) {
-			return;
+		int left, top, widthwidth, heightheight;
+		if(mManager.UIData.frameView.isCropping()) {
+			RectF rect = framingRect;
+			FrameLayout view = mManager.UIData.surfaceHolder;
+			float scale = fitScale * view.getScaleX();
+			left=(int)((rect.left - view.getTranslationX())/scale);
+			top=(int)((rect.top - view.getTranslationY())/scale);
+			widthwidth=(int)(rect.width()/scale);
+			heightheight=(int)(rect.height()/scale);
+			if(left<0) left=0;
+			if(widthwidth+left>=sWidth) {
+				widthwidth=sWidth-1-left;
+			}
+			if(top<0) top=0;
+			if(heightheight+top>=sHeight) {
+				heightheight=sHeight-1-top;
+			}
+			if(widthwidth<=0||heightheight<=0) {
+				return;
+			}
+		} else {
+			left = top = 0;
+			widthwidth = sWidth-1;
+			heightheight = sHeight-1;
 		}
 		Result res = null;
-		CMN.Log("decode……", decodeType, CMN.id(bitmap), sWidth, sHeight);
+		CMN.Log("decodeBitmap::", decodeType, sWidth, sHeight, "rc=", left, top, widthwidth, heightheight);
 		
 		if(decodeType==0) {
 			CMN.rt();
 			setImage(bitmap);
-			CMN.pt("setImage::");
-			CMN.rt();
+			CMN.pt("setImage::"); CMN.rt();
 			ArrayList<Rect> wds = tess.getWords().getBoxRects();
 			CMN.pt("取得words::", wds.size());
 			tess.setRectangle(left, top, widthwidth, heightheight);
 			res = new Result(tess.getUTF8Text(), null, null, BarcodeFormat.QR_CODE);
+			CMN.pt("识别::", wds.size());
 		}
 		else if(decodeType==1) {
 			try {
@@ -396,14 +400,12 @@ public class DecodeManager {
 		}
 		
 		if(left<0) left=0;
-		if(widthwidth+left>sWidth) {
-			widthwidth=sWidth-left;
+		if(widthwidth+left>=sWidth) {
+			widthwidth=sWidth-1-left;
 		}
-		
 		if(top<0) top=0;
-		
-		if(heightheight+top>sHeight) {
-			heightheight=sHeight-top;
+		if(heightheight+top>=sHeight) {
+			heightheight=sHeight-1-top;
 		}
 		
 		if(widthwidth<=0||heightheight<=0) {

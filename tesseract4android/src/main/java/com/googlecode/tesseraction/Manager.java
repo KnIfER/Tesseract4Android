@@ -189,6 +189,7 @@ public class Manager implements View.OnClickListener {
 			UIStates[1]=realTime_QROCR;
 			
 		}
+		UIData.frameView.setCropping(false);
 		UIData.frameView.preset(decodeType<<1|(cameraManager.realtime?1:0));
 //		LayerDrawable ld = (LayerDrawable) UIData.torch.getDrawable();
 //		ld.getDrawable(0).setAlpha(torchLight?255:64);
@@ -247,6 +248,9 @@ public class Manager implements View.OnClickListener {
 			} break;
 			case R.id.playBtn:{
 				decode();
+			} break;
+			case R.id.cropBtn:{
+				UIData.frameView.setCropping(!UIData.frameView.isCropping());
 			} break;
 			case R.id.ivBack:{
 //				finish();

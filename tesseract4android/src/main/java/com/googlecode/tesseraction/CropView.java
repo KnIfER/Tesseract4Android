@@ -11,6 +11,7 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
@@ -130,6 +131,8 @@ public class CropView extends View {
 		paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 		paint.setColor(0x900f0f0f);
 		paint.setAlpha(CURRENT_POINT_OPACITY);
+		
+		mskColor = getBackground();
 	}
 	
 	/**  初始化布局   */
@@ -163,6 +166,9 @@ public class CropView extends View {
 	
 	@Override
 	protected void onDraw(Canvas canvas) {
+		if(!cropping) {
+			return;
+		}
 		framePaint.setStrokeWidth(fixed?mBorderStrokeWidth:mCornerStrokeWidth);
 		framePaint.setStyle(Paint.Style.STROKE);
 		// 画边框
@@ -341,7 +347,8 @@ public class CropView extends View {
 				orgX = lastX = x;
 				orgY = lastY = y;
 				int touchMode = mOutTouchMode;
-				if(fixed) {
+				boolean fnc = fixed || !cropping;
+				if(fnc) {
 					touchMode = 1;
 				} else {
 					if(touchMode==1 && mViewDelegation==null)
@@ -352,7 +359,7 @@ public class CropView extends View {
 					if(y>= frameOffsets.top && y<= frameOffsets.bottom)
 						MoveStates|=0x2;
 				}
-				if(fixed || (MoveStates&0x3)!=0x3 &&
+				if(fnc || (MoveStates&0x3)!=0x3 &&
 						( x<= frameOffsets.left
 								|| x>= frameOffsets.right
 								|| y<= frameOffsets.top
@@ -371,7 +378,7 @@ public class CropView extends View {
 						}
 					}
 				}
-				if(fixed) {
+				if(fnc) {
 					activePntBdr = -1;
 				} else {
 					activePntBdr = getActivePntBdr(MoveStates, x, y);
@@ -671,7 +678,9 @@ public class CropView extends View {
 	
 	int mPreset = -1;
 	
-	boolean fixed = true;
+	private boolean fixed = true;
+	private boolean cropping = true;
+	private Drawable mskColor;
 	
 	/** 0=static ocr; 1=dynamic ocr; 2=static qr; 3=dynamic qr;  */
 	public void preset(int preset) {
@@ -696,6 +705,17 @@ public class CropView extends View {
 			invalidate();
 		}
 		CMN.Log("preset::", preset, fixed);
+	}
+	
+	public void setCropping(boolean cropping) {
+		if (this.cropping != cropping) {
+			this.cropping = cropping;
+			setBackground(cropping?mskColor:null);
+		}
+	}
+	
+	public boolean isCropping() {
+		return cropping;
 	}
 	
 	public interface CropViewListener {
