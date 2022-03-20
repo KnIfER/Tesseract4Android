@@ -3,7 +3,7 @@ package com.googlecode.tesseraction;
 public final class Options {
 	/** not in power saving mode */
 	boolean isPoweringMode = true;
-	boolean tourchLight = true;
+	boolean tourchLight = false;
 	public final boolean getTorchLight(){
 		return tourchLight;
 	}

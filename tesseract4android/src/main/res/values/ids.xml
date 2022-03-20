@@ -2,4 +2,5 @@
 <resources>
 	<item name="decode" type="id" />
 	<item name="quit" type="id" />
+	<item name="decode2" type="id" />
 </resources>

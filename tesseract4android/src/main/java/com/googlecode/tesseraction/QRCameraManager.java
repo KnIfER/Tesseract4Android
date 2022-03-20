@@ -24,10 +24,7 @@ import static com.googlecode.tesseraction.QRCameraUtils.setFocusMode;
 import static com.googlecode.tesseraction.QRCameraUtils.setTorch;
 
 import android.content.Context;
-import android.content.pm.ActivityInfo;
 import android.graphics.Point;
-import android.graphics.Rect;
-import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.hardware.Sensor;
@@ -37,21 +34,9 @@ import android.hardware.SensorManager;
 import android.os.Handler;
 import android.os.Message;
 import android.util.DisplayMetrics;
-import android.view.Surface;
 import android.view.View;
 
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.InvertedLuminanceSource;
-import com.google.zxing.LuminanceSource;
-import com.google.zxing.NotFoundException;
-import com.google.zxing.PlanarYUVLuminanceSource;
-import com.google.zxing.Result;
-import com.googlecode.leptonica.android.Pix;
-import com.googlecode.leptonica.android.Pixa;
-
 import java.io.IOException;
-import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 
 /** This object wraps the Camera service object and expects to be the only one
  * talking to it. The implementation encapsulates the steps needed to take
@@ -62,9 +47,10 @@ public final class QRCameraManager implements SensorEventListener {
 	public int screenRotation;
 	private ImageListener imageListener;
 	
-	private RectF framingRect=new RectF();
-	
 	private boolean previewing;
+	
+	/** false=save battery power, take a static photo then recognize! */
+	public boolean realtime = true;
 	
 	private int requestedCameraId = -1;
 	private int requestedFramingRectWidth;
@@ -72,7 +58,7 @@ public final class QRCameraManager implements SensorEventListener {
 	
 	private boolean ContinuousFocusing;
 	
-	QRActivity a;
+	Manager mManager;
 	
 	/** Preview frames are delivered here, which we pass on to the registered
 	 * handler. Make sure to clear the handler so it will only receive one
@@ -91,28 +77,18 @@ public final class QRCameraManager implements SensorEventListener {
 	float mLastY;
 	float mLastZ;
 	
-	DisplayMetrics dm;
-	
-	WeakReference<byte[]> TmpData = new WeakReference<>(null);
-	
 	public Point screenResolution = new Point();
 	public Point cameraResolution = new Point();
 	
 	/** 摄像机参数 */
 	private Camera.Parameters parameters;
 	
-	public QRCameraManager(QRActivity a, DisplayMetrics dm) {
-		this.a=a;
-		
-		this.dm = dm;
-		
-		imageListener = new ImageListener(a.root);
-		
-		sensorManager = (SensorManager) a.getSystemService(Context.SENSOR_SERVICE);
-		
+	public QRCameraManager(Manager manager) {
+		this.mManager=manager;
+		imageListener = new ImageListener(manager.UIData.getRoot());
+		sensorManager = (SensorManager) manager.getContext().getSystemService(Context.SENSOR_SERVICE);
 		directionSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
-		
-		getFramingRect(true);
+		manager.getFramingRect(true);
 	}
 	
 	/** Opens the camera driver and initializes the hardware parameters. */
@@ -135,10 +111,10 @@ public final class QRCameraManager implements SensorEventListener {
 	
 	public void ResetCameraSettings() {
 		Camera reset_camera = camera;
-
+		DisplayMetrics dm = mManager.dm;
 		screenResolution.x = dm.widthPixels;
 		screenResolution.y = dm.heightPixels;
-		if(a.isPortrait) { //竖屏更改4 preview size is always something like 480*320, other 320*480
+		if(mManager.isPortrait) { //竖屏更改4 preview size is always something like 480*320, other 320*480
 			screenResolution.x = dm.heightPixels;
 			screenResolution.y = dm.widthPixels;
 		}
@@ -146,10 +122,10 @@ public final class QRCameraManager implements SensorEventListener {
 		//CMN.Log("Camera_resolution: " + cameraResolution, dm.widthPixels+"x"+dm.heightPixels);
 		
 		if (requestedFramingRectWidth > 0 && requestedFramingRectHeight > 0) {
-			applyManualFramingRect(requestedFramingRectWidth, requestedFramingRectHeight);
+			mManager.applyManualFramingRect(requestedFramingRectWidth, requestedFramingRectHeight);
 			requestedFramingRectWidth=requestedFramingRectHeight=0;
 		} else {
-			getFramingRect(true);
+			mManager.getFramingRect(true);
 		}
 		
 		parameters = reset_camera.getParameters();
@@ -173,19 +149,10 @@ public final class QRCameraManager implements SensorEventListener {
 				}
 			}
 		}
-		
 		Camera.Size previewSize = parameters.getPreviewSize();
-		
-		ContinuousFocusing = a.opt.getContinuousFocus() && getContinuousFocusing(parameters.getFocusMode());
-		
-		if(a.isPortrait) {
-			a.onNewVideoViewLayout(previewSize.height, previewSize.width);
-		} else {
-			a.onNewVideoViewLayout(previewSize.width, previewSize.height);
-		}
-		
+		ContinuousFocusing = mManager.opt.getContinuousFocus() && getContinuousFocusing(parameters.getFocusMode());
+		mManager.onNewVideoViewLayout(true, previewSize.width, previewSize.height);
 		decorateCameraSettings();
-		
 		imageListener.ready();
 	}
 	
@@ -198,7 +165,7 @@ public final class QRCameraManager implements SensorEventListener {
 				params = parameters = decor_camera.getParameters();
 			}
 			setBestExposure(params, true);
-			setTorch(params, a.opt.getTorchLight());
+			setTorch(params, mManager.opt.getTorchLight());
 			//setBestPreviewFPS(params);
 			//setBarcodeSceneMode(params);
 			decor_camera.setParameters(params);
@@ -218,7 +185,7 @@ public final class QRCameraManager implements SensorEventListener {
 			CMN.Log("safe mode");
 		}
 		
-		setFocusMode(parameters, a.opt.getContinuousFocus(), safeMode);
+		setFocusMode(parameters, mManager.opt.getContinuousFocus(), safeMode);
 		
 		//parameters.setPreviewFormat(ImageFormat.JPEG);
 		
@@ -233,7 +200,7 @@ public final class QRCameraManager implements SensorEventListener {
 		
 		
 		/****************** 竖屏更改2 *********************/
-		camera.setDisplayOrientation(a.isPortrait?90:0);
+		camera.setDisplayOrientation(mManager.isPortrait?90:0);
 		
 		Camera.Parameters afterParameters = camera.getParameters();
 		
@@ -259,12 +226,12 @@ public final class QRCameraManager implements SensorEventListener {
 		}
 	}
 	
-	public void release() {
+	public void destroy() {
 		pause();
 		close();
-		a.root.removeCallbacks(imageListener.FocusRunnable);
+		mManager.root.removeCallbacks(imageListener.FocusRunnable);
 		imageListener.root=null;
-		a=null;
+		mManager=null;
 	}
 	
 	/** Asks the camera hardware to begin drawing preview frames to the screen. */
@@ -304,37 +271,13 @@ public final class QRCameraManager implements SensorEventListener {
 	}
 	
 	/** A single preview frame will be returned to the handler supplied. The data will arrive as byte[] in the message.obj field */
-	public synchronized void requestPreviewFrame(Handler handler) {
-		if (camera != null && previewing) {
+	public synchronized void requestPreviewFrame() {
+		if (previewing && realtime && camera!=null) {
 			//CMN.Log("setOneShotPreviewCallback", handler);
-			camera.setOneShotPreviewCallback(imageListener.ready(handler));
+			camera.setOneShotPreviewCallback(imageListener.ready(mManager.handler));
 		}
 	}
 	
-	/** Calculates the framing rect which the UI should draw to show the user
-	 * where to place the barcode. This target helps with alignment as well as
-	 * forces the user to hold the device far enough away to ensure the image
-	 * will be in focus. 计算这个条形码的扫描框；便于声明的同时，也强制用户通过改变距离来扫描到整个条形码
-	 *
-	 * @return The rectangle to draw on screen in window coordinates. */
-	public synchronized RectF getFramingRect(boolean recalculate) {
-		if (recalculate) {
-			int width = (int) (Math.min(dm.widthPixels, dm.heightPixels)*0.7);
-			int height = (int) (Math.min(dm.widthPixels, dm.heightPixels)*0.7);
-			
-			int leftOffset = (dm.widthPixels - width) / 2;
-			int topOffset = (dm.heightPixels - height) / ((a.getResources().getConfiguration().orientation== ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)?3:2);
-			
-			framingRect.set(leftOffset, topOffset, leftOffset + width, topOffset + height);
-			
-			//CMN.Log("Calculated framing rect: " + framingRect);
-		}
-		return framingRect;
-	}
-	
-	public void setFramingRect(RectF rect) {
-		framingRect = rect;
-	}
 
 	/** Allows third party apps to specify the camera ID, rather than determine
 	 * it automatically based on available cameras and their orientation.. */
@@ -342,314 +285,15 @@ public final class QRCameraManager implements SensorEventListener {
 		requestedCameraId = cameraId;
 	}
 	
-	/** Allows third party apps to specify the scanning rectangle dimensions,
-	 * rather than determine them automatically based on screen resolution. */
-	public synchronized void applyManualFramingRect(int width, int height) {
-		if (width > dm.widthPixels) {
-			width = dm.widthPixels;
-		}
-		if (height > dm.heightPixels) {
-			height = dm.heightPixels;
-		}
-		int leftOffset = (dm.widthPixels - width) / 2;
-		int topOffset = (dm.heightPixels - height) / 2;
-		framingRect.set(leftOffset, topOffset, leftOffset + width, topOffset + height);
-		//CMN.Log("Calculated manual framing rect: " + framingRect);
-	}
-	
-	/**Build and decode the appropriate LuminanceSource object.
-	 * @param data A preview frame.
-	 * @param sWidth Source Width
-	 * @param sHeight Source Height
-	 * @param rotated In portrait mode, Camera Display Is rotated, but data remains the same.
-*                	Just swap the dimensions to get real image size and framing rect.
-	 * @param rotate Whether to try again with rotated data for orientation-sensitive bar-codes such as ISBN.
-	 *   二维码不必旋转、翻转
-	 * */
-	public Result decodeLuminanceSource(QRActivity.QRActivityHandler handler, byte[] data, int sWidth, int sHeight, boolean rotated, boolean rotate, boolean invert) throws NotFoundException {
-		RectF rect = getFramingRect(false);
-		// Go ahead and assume it's YUV rather than die.
-		//if(true) return new PlanarYUVLuminanceSource(data, sWidth, sHeight, 0, 0, sWidth, sHeight, false);
-		//CMN.Log("buildLuminanceSource", width, height, rect.left, rect.top, rect.width(), rect.height());
-		//CMN.Log("scale="+a.scale, "trans="+a.vTranslate);
-		
-		// 源图像显示后的缩放比，比如0.5、0.9
-		float scale = a.scale * a.surfaceHolder.getScaleX();
-		
-		int left=(int)((rect.left-a.vTranslate.x-a.surfaceHolder.getTranslationX())/scale);
-		int top=(int)((rect.top-a.vTranslate.y-a.surfaceHolder.getTranslationY())/scale);
-		
-		//CMN.Log("getScaleX::", a.surfaceView.getScaleX(), a.surfaceView.getScaleY());
-		
-		int widthwidth=(int)(rect.width()/scale);
-		int heightheight=(int)(rect.height()/scale);
-		
-		float scaleX = a.surfaceView.getScaleX();
-		float scaleY = a.surfaceView.getScaleY();
-		if(scaleX <0) {
-			// x轴是经过翻转的
-			left = sWidth - left - widthwidth;
-		}
-		if(scaleY <0) {
-			// y轴是经过翻转的
-			top = sHeight - top - heightheight;
-		}
-		
-		if(rotated) { //竖屏模式下，图像的数据其实还是横屏的老样子。所以交换一下宽高。
-			int tmp=sWidth;
-			sWidth = sHeight;
-			sHeight = tmp;
-			
-			tmp = widthwidth;
-			widthwidth = heightheight;
-			heightheight = tmp;
-			
-			tmp=left;
-			left=top;
-			top=sHeight-tmp-heightheight;
-		}
-		
-		if(left<0) left=0;
-		if(widthwidth+left>sWidth) {
-			widthwidth=sWidth-left;
-		}
-		
-		if(top<0) top=0;
-		
-		if(heightheight+top>sHeight) {
-			heightheight=sHeight-top;
-		}
-		
-		if(widthwidth<=0||heightheight<=0) {
-			return null;
-		}
-		LuminanceSource source;
-		if(rotate) {//必须旋转数据时，为节省CPU时间，只处理必要的部分。
-			int size=heightheight*widthwidth;
-			if(heightheight+left-1+(widthwidth+top-1)*sWidth<size) {
-				CMN.Log("oops", size, data.length);
-				return null;
-			}
-			byte[] rotatedData = acquireTmpData(size);
-			for (int y = 0; y < heightheight; y++) {
-				for (int x = 0; x < widthwidth; x++)
-					rotatedData[x + y * widthwidth] =  data[(y+left)  + (x+top) * sWidth];
-			}
-			data = rotatedData;
-			source =  new PlanarYUVLuminanceSource(data, heightheight, widthwidth, 0, 0,  heightheight, widthwidth, false);
-		} else {
-			source = new PlanarYUVLuminanceSource(data, sWidth, sHeight, left, top,  widthwidth, heightheight, false);
-		}
-		
-		if(invert) {
-			source = new InvertedLuminanceSource(source);
-		}
-		//CMN.Log(sWidth, sHeight, left, top,  widthwidth, heightheight);
-		//source = PlanarYUVLuminanceSource(data, sWidth, sHeight, 0, 0,  sWidth, sHeight, false);
-		return handler.try_decode_source(source);
-	}
-	
-	public Result decodeOCR(QRActivity.QRActivityHandler handler, byte[] data, int sWidth, int sHeight, boolean rotated, boolean rotate, boolean invert) throws NotFoundException {
-		RectF rect = getFramingRect(false);
-		// Go ahead and assume it's YUV rather than die.
-		//if(true) return new PlanarYUVLuminanceSource(data, sWidth, sHeight, 0, 0, sWidth, sHeight, false);
-		//CMN.Log("buildLuminanceSource", width, height, rect.left, rect.top, rect.width(), rect.height());
-		//CMN.Log("scale="+a.scale, "trans="+a.vTranslate);
-		
-		// 源图像显示后的缩放比，比如0.5、0.9
-		float scale = a.scale * a.surfaceHolder.getScaleX();
-		
-		int left=(int)((rect.left-a.vTranslate.x-a.surfaceHolder.getTranslationX())/scale);
-		int top=(int)((rect.top-a.vTranslate.y-a.surfaceHolder.getTranslationY())/scale);
-		
-		int widthwidth=(int)(rect.width()/scale);
-		int heightheight=(int)(rect.height()/scale);
-		
-		float scaleX = a.surfaceView.getScaleX();
-		float scaleY = a.surfaceView.getScaleY();
-		if(scaleX <0) {
-			// x轴是经过翻转的
-			left = sWidth - left - widthwidth;
-		}
-		if(scaleY <0) {
-			// y轴是经过翻转的
-			top = sHeight - top - heightheight;
-		}
-		
-		if(rotated) { //竖屏模式下，图像的数据其实还是横屏的老样子。所以交换一下宽高。
-			int tmp=sWidth;
-			sWidth = sHeight;
-			sHeight = tmp;
-			
-			tmp = widthwidth;
-			widthwidth = heightheight;
-			heightheight = tmp;
-			
-			tmp=left;
-			left=top;
-			top=sHeight-tmp-heightheight;
-		}
-		
-		if(left<0) left=0;
-		if(widthwidth+left>sWidth) {
-			widthwidth=sWidth-left;
-		}
-		
-		if(top<0) top=0;
-		
-		if(heightheight+top>sHeight) {
-			heightheight=sHeight-top;
-		}
-		
-		if(widthwidth<=0||heightheight<=0) {
-			return null;
-		}
-		int size=heightheight*widthwidth;
-		byte[] rotatedData = acquireTmpData(size);
-		rotate = false;
-		if (screenRotation == Surface.ROTATION_90) {
-			for(int i=0; i<widthwidth; i++ )
-			{
-				for(int j=0; j<heightheight; j++ )
-				{
-					rotatedData[i+widthwidth*j] = data[(i+left)+sWidth*(j+top)];
-				}
-			}
-			handler.tess.setImage(rotatedData, widthwidth, heightheight, 1, widthwidth);
-		}
-		else if (screenRotation == Surface.ROTATION_270) {
-			for(int i=0; i<widthwidth; i++ )
-			{
-				for(int j=0; j<heightheight; j++ )
-				{
-					//rotatedData[i+widthwidth*j] = data[widthwidth-i+widthwidth*(heightheight-j)];
-					rotatedData[i+widthwidth*j] = data[(widthwidth-i+left)+sWidth*(heightheight-j+top)];
-				}
-			}
-			handler.tess.setImage(rotatedData, widthwidth, heightheight, 1, widthwidth);
-		}
-		else if (screenRotation == Surface.ROTATION_0) {
-			// 逆时针旋转90°（顺时针270°）
-			for(int i=0; i<heightheight; i++ )
-			{
-				for(int j=0; j<widthwidth; j++ )
-				{
-					rotatedData[i+heightheight*j] = data[(j+left)+sWidth*(heightheight-1-i+top)];
-				}
-			}
-			rotate=true;
-		}
-		else if (screenRotation == Surface.ROTATION_180) {
-			// 逆时针旋转90°（顺时针270°）
-			for(int i=0; i<heightheight; i++ )
-			{
-				for(int j=0; j<widthwidth; j++ )
-				{
-					//rotatedData[i+widthwidth*j] = data[widthwidth-i+widthwidth*(heightheight-j)];
-					rotatedData[i+heightheight*j] = data[(heightheight-j+left)+sWidth*(heightheight-1-widthwidth+i+top)];
-				}
-			}
-			rotate=true;
-			//handler.tess.setImage(rotatedData, heightheight, widthwidth, 1, heightheight);
-		}
-		if(rotate) {
-			int tmp = widthwidth;
-			widthwidth = heightheight;
-			heightheight = tmp;
-		}
-		handler.tess.setImage(rotatedData, widthwidth, heightheight, 1, widthwidth);
-		
-//		CMN.Log("handler.tess.getRegions().size()::", handler.tess.getConnectedComponents().getBoxRects().size());
-		
-		
-		try {
-			//handler.activity.get().qr_frame.possibleTextRects = handler.tess.getConnectedComponents().getBoxRects();
-			Pixa words = handler.tess.getWords();
-			
-			ArrayList<Rect> rects = words.getBoxRects();
-			handler.activity.get().qr_frame.possibleTextRects = rects;
-			
-			
-			handler.activity.get().qr_frame.postInvalidate();
-			
-			
-			//handler.activity.get().qr_frame.possibleTextRects = handler.tess.getTextlines().getBoxRects();
-			
-			
-			int cX=widthwidth/2, cY=heightheight/2, dist=Integer.MAX_VALUE, boxIdx=0, boxDist;
-			Rect rc;
-			for (int i = 0; i < rects.size(); i++) {
-				rc = rects.get(i);
-				if(rc.contains(cX, cY)) {
-					boxIdx = i;
-					break;
-				}
-				int d = distSQ(rc.centerX()-cX, rc.centerY()-cY);
-				if(d<dist) {
-					dist = d;
-					boxIdx = i;
-				}
-			}
-			
-			rc=rects.get(boxIdx);
-//			CMN.Log("decoding_ocr_rect::", rc.left, rc.top, rc.width()+"/"+widthwidth, rc.height()+"/"+heightheight);
-			if(rc.width() * rc.height() >= 500*500) {
-				return null;
-			}
-			
-//			Pix pix = words.getPix(boxIdx);
-//			CMN.Log("decoding_ocr_rect::", pix.getData().length);
-//			handler.tess.setImage(pix);
-//			pix.recycle();
-			
-			final int pad = 20;
-			int wordWidth = rc.width()+pad*2;
-			int wordHeight = rc.height()+pad*2;
-			left = rc.left-pad;
-			top = rc.top-pad;
-			byte[] wordData = new byte[wordWidth*wordHeight];
-			for(int i=0; i<wordWidth; i++ )
-			{
-				for(int j=0; j<wordHeight; j++ )
-				{
-					wordData[i+wordWidth*j] = rotatedData[(left+i)+widthwidth*(top+j)];
-				}
-			}
-			handler.tess.setImage(wordData, wordWidth, wordHeight, 1, wordWidth);
-			//Pix.createFromPix(wordData, wordWidth, wordHeight)
-		} catch (Exception e) {
-			CMN.Log(e);
-		}
-		//if(true) return null;
-		return new Result(handler.tess.getUTF8Text(), null, null, BarcodeFormat.QR_CODE);
-		//source = new PlanarYUVLuminanceSource(data, sWidth, sHeight, left, top,  widthwidth, heightheight, false);
-	}
-	
-	/**复用临时数据*/
-	public byte[] acquireTmpData(int size) {
-		byte[] ret = TmpData.get();
-		if(ret==null||ret.length<size)
-		{
-			TmpData.clear();
-			TmpData = new WeakReference<>(ret=new byte[size]);
-		}
-		//else CMN.Log("reusing……", ret.length, size);
-		return ret;
-	}
-	
 	public void autoFocus() {
 		imageListener.start();
 	}
 	
 	public void resumeSensor() {
-		if(!ContinuousFocusing && a.opt.getSensorAutoFocus()) {
+		if(!ContinuousFocusing && mManager.opt.getSensorAutoFocus()) {
 			registeredSensorListener=true;
 			sensorManager.registerListener(this, directionSensor, SensorManager.SENSOR_DELAY_NORMAL);
 		}
-	}
-	
-	private int distSQ(int x, int y) {
-		return x*x+y*y;
 	}
 	
 	public void pauseSensor() {
@@ -683,7 +327,25 @@ public final class QRCameraManager implements SensorEventListener {
 	
 	@Override
 	public void onAccuracyChanged(Sensor sensor, int accuracy) {
-	
+		// Do something here if sensor accuracy changes.
+		// You must implement this callback in your code.
+		//if (sensor == )
+		{
+			switch (accuracy) {
+				case 0:
+					System.out.println("onAccuracyChanged::Unreliable");
+					break;
+				case 1:
+					System.out.println("onAccuracyChanged::Low Accuracy");
+					break;
+				case 2:
+					System.out.println("onAccuracyChanged::Medium Accuracy");
+					break;
+				case 3:
+					System.out.println("onAccuracyChanged::High Accuracy");
+					break;
+			}
+		}
 	}
 	
 	/** 摄像机回调 */
@@ -707,7 +369,7 @@ public final class QRCameraManager implements SensorEventListener {
 			//CMN.Log("onAutoFocus::", success);
 			focusing=false;
 			if(useAutoFocus) {
-				if(a.opt.getLoopAutoFocus()) {
+				if(mManager.opt.getLoopAutoFocus()) {
 					postAutoFocus();
 				}
 			}
@@ -754,6 +416,7 @@ public final class QRCameraManager implements SensorEventListener {
 			//CMN.Log("onPreviewFrame", CMN.tid());
 			if (previewHandler != null) {
 				Message message = previewHandler.obtainMessage(R.id.decode, data);
+				message.arg1=0;
 				//CMN.Log("data_sent::", CMN.id(data));
 				message.sendToTarget();
 				previewHandler = null;

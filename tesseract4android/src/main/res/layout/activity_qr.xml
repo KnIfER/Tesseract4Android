@@ -8,28 +8,28 @@
 		android:layout_width="match_parent"
 		android:layout_height="match_parent"
 		>
-
 		<FrameLayout
 			android:id="@+id/surface_holder"
 			android:layout_width="match_parent"
 			android:layout_height="match_parent"
 			>
-
 			<TextureView
 				android:id="@+id/preview_view"
 				android:layout_width="match_parent"
 				android:layout_height="match_parent"
-				android:layout_margin="2dp"
+				/>
+			<ImageView
+				android:id="@+id/imageView"
+				android:layout_width="match_parent"
+				android:layout_height="match_parent"
 				/>
 		</FrameLayout>
+		<com.googlecode.tesseraction.CropView
+			android:id="@+id/frame_view"
+			android:layout_width="fill_parent"
+			android:layout_height="fill_parent"
+			android:background="#60000000" />
 	</FrameLayout>
-
-	<com.googlecode.tesseraction.CropView
-		android:id="@+id/qr_frame"
-		android:layout_width="fill_parent"
-		android:layout_height="fill_parent"
-		android:background="#60000000"
-		/>
 
 	<LinearLayout
 		android:id="@+id/toolbar_content"
@@ -55,7 +55,7 @@
 			android:layout_weight="1"
 			android:textColor="#9fffffff"
 			android:textSize="20sp"
-			android:text="||||| |||||"
+			android:text="OCR"
 			android:gravity="center_vertical"
 			android:paddingLeft="10dp"
 			/>
@@ -94,17 +94,59 @@
 		android:visibility="gone"
 		/>
 
-	<Button
-		android:id="@+id/tv1"
+	<HorizontalScrollView
+		android:id="@+id/fltTools"
 		android:layout_width="wrap_content"
-		android:layout_height="wrap_content"
-		android:text="打开相机"
-		android:layout_gravity="center_horizontal"
-		android:padding="10dp"
-		android:textColor="#FF1FB3E2"
-		android:background="?android:attr/listChoiceBackgroundIndicator"
-		android:visibility="gone"
-		/>
+		android:layout_height="60dp"
+		android:layout_gravity="bottom|center"
+		android:layout_marginBottom="108dp"
+		android:clipChildren="false"
+		android:clipToPadding="false"
+		>
+		<LinearLayout
+			android:id="@+id/navHorBtns"
+			android:layout_width="wrap_content"
+			android:layout_height="match_parent"
+			android:orientation="horizontal"
+			android:divider="@drawable/divider2"
+			android:showDividers="middle"
+			android:paddingStart="58dp"
+			android:paddingEnd="58dp"
+			android:clipChildren="false"
+			android:clipToPadding="false"
+			>
+			<android.widget.ImageView
+				android:id="@+id/cropBtn"
+				android:layout_width= "60dp"
+				android:layout_height="match_parent"
+				android:background="@drawable/item_selector_circle1"
+				android:src="@drawable/ic_baseline_crop_24"
+				android:clickable="true"
+				android:tint="#3B7DB1"
+				android:padding="10dp"
+				/>
+			<android.widget.ImageView
+				android:id="@+id/cameraBtn"
+				android:layout_width= "60dp"
+				android:layout_height="match_parent"
+				android:background="@drawable/item_selector_circle1"
+				android:src="@drawable/ic_baseline_photo_camera_24"
+				android:clickable="true"
+				android:tint="#3B7DB1"
+				android:padding="10dp"
+				/>
+			<android.widget.ImageView
+				android:id="@+id/playBtn"
+				android:layout_width= "60dp"
+				android:layout_height="match_parent"
+				android:background="@drawable/item_selector_circle1"
+				android:src="@drawable/ic_baseline_play_arrow_24"
+				android:clickable="true"
+				android:tint="#3B7DB1"
+				android:padding="10dp"
+				/>
+		</LinearLayout>
+	</HorizontalScrollView>
 
 	<LinearLayout
 		android:id="@+id/toast"

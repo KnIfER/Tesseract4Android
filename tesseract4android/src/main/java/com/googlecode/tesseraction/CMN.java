@@ -58,7 +58,7 @@ public class CMN {
 				}
 			}
 			msg.append(o1);
-			msg.append("\n");
+			msg.append(", ");
 		}
 		String message = msg.toString();
 		android.util.Log.d("fatal poison", message);

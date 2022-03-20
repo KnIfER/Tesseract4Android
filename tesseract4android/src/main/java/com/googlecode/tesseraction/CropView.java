@@ -79,13 +79,12 @@ public class CropView extends View {
 	public View mViewDelegation;
 	
 	Paint framePaint;
-	Paint cropPaint;
+	Paint frameEraser;
 	private final Paint rectPaint;
 	
-	private Bitmap resultBitmap;
 	private int resultPointColor; // 特征点的颜色
 	private final List<ResultPoint> possibleResultPoints = new ArrayList<>(5);
-	public ArrayList<Rect> possibleTextRects;// = new ArrayList<>(256);
+	public List<Rect> possibleTextRects;// = new ArrayList<>(256);
 	private final List<ResultPoint> lastPossibleResultPoints = new ArrayList<>(5);
 	
 	
@@ -114,15 +113,15 @@ public class CropView extends View {
 		framePaint.setColor(Color.WHITE);
 		framePaint.setAntiAlias(true);
 		
-		cropPaint = new Paint(framePaint);
-		cropPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
-		cropPaint.setStyle(Paint.Style.FILL);
+		frameEraser = new Paint(framePaint);
+		frameEraser.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
+		frameEraser.setStyle(Paint.Style.FILL);
 		
 		rectPaint = new Paint();
 		rectPaint.setStyle(Paint.Style.STROKE);
-		rectPaint.setStrokeWidth(2* density);
+		rectPaint.setStrokeWidth(1.3f);
 		rectPaint.setColor(Color.WHITE);
-		rectPaint.setAlpha(CURRENT_POINT_OPACITY);
+		//rectPaint.setAlpha(CURRENT_POINT_OPACITY);
 		
 		Resources resources = getResources();
 		resultPointColor = 0xFFFF25F;
@@ -156,34 +155,24 @@ public class CropView extends View {
 	
 	public void setViewDelegation(View viewToManipulate) {
 		mViewDelegation = viewToManipulate;
-		if(mViewDelegation!=null) {
-			mViewDelegation.setPivotX(0);
-			mViewDelegation.setPivotY(0);
+		if(viewToManipulate!=null) {
+			viewToManipulate.setPivotX(0);
+			viewToManipulate.setPivotY(0);
 		}
 	}
 	
 	@Override
 	protected void onDraw(Canvas canvas) {
-		framePaint.setStrokeWidth(mBorderStrokeWidth);
+		framePaint.setStrokeWidth(fixed?mBorderStrokeWidth:mCornerStrokeWidth);
 		framePaint.setStyle(Paint.Style.STROKE);
-		
+		// 画边框
 		canvas.drawRect(frameOffsets, framePaint);
-		canvas.drawRect(frameOffsets, cropPaint);
-		
-		
+		canvas.drawRect(frameOffsets, frameEraser);
+		// 画激光和词框
 		{
 			RectF frame = frameOffsets; // 取景框
-			//Rect previewFrame = cameraManager.getFramingRectInPreview();
 			if (frame == null) return;
-			
-			int width = getWidth();
-			int height = getHeight();
-			
-			if (resultBitmap != null) {
-				// Draw the opaque result bitmap over the scanning rectangle
-				// 如果有二维码结果的Bitmap，在扫取景框内绘制不透明的result Bitmap
-				canvas.drawBitmap(resultBitmap, null, frame, null);
-			} else {
+			{
 				long delay = ANIMATION_DELAY;
 				if(drawLaser) {
 					// laser blade hen hen hah hyi！
@@ -211,7 +200,7 @@ public class CropView extends View {
 						}
 					}
 				}
-				ArrayList<Rect> rects = possibleTextRects;
+				List<Rect> rects = possibleTextRects;
 				if(rects!=null) {
 					float frameHeightPlusLeft = frame.left+frame.height();
 					for (Rect rect : rects) {
@@ -249,20 +238,20 @@ public class CropView extends View {
 		}
 		
 		final int temp1 = (mCornerStrokeWidth - mBorderStrokeWidth) / 2;
-		// 画准星与方框的角
-		{
-			float x,y;
-			if(drawCrossSight) {
-				framePaint.setStrokeWidth(mCornerStrokeWidth/3);
-				int tmp = mCornerSize / 2;
-				x = frameOffsets.left + frameOffsets.width() / 2 - tmp;
-				y = frameOffsets.top + frameOffsets.height() / 2;
-				canvas.drawLine(x, y, x+mCornerSize, y, framePaint);
-				x += tmp;
-				y -= tmp;
-				canvas.drawLine(x, y, x, y+mCornerSize, framePaint);
-			}
-			
+		float x,y;
+		// 画准星
+		if(drawCrossSight) {
+			framePaint.setStrokeWidth(mCornerStrokeWidth/3);
+			int tmp = mCornerSize / 2;
+			x = frameOffsets.left + frameOffsets.width() / 2 - tmp;
+			y = frameOffsets.top + frameOffsets.height() / 2;
+			canvas.drawLine(x, y, x+mCornerSize, y, framePaint);
+			x += tmp;
+			y -= tmp;
+			canvas.drawLine(x, y, x, y+mCornerSize, framePaint);
+		}
+		// 画角
+		if(!fixed) {
 			final int temp2 = (mCornerStrokeWidth + mBorderStrokeWidth) / 2;
 			final int temp3 = temp1-temp2;
 			float sizeX=mCornerSize-temp1,sizeY=temp2+sizeX;
@@ -295,7 +284,7 @@ public class CropView extends View {
 			canvas.drawLine(x+temp1, y, x+temp1, y-sizeY, framePaint);
 		}
 		
-		// 画方框的格子，共四根线
+		// 画格子，共四根线
 		if (mGridShowType==1 || mGridShowType==2&&MoveStates!=0) {
 			framePaint.setStrokeWidth(1);
 			framePaint.setStyle(Paint.Style.STROKE);
@@ -351,16 +340,19 @@ public class CropView extends View {
 			case MotionEvent.ACTION_DOWN:{
 				orgX = lastX = x;
 				orgY = lastY = y;
-				//检查内移动、外移动
-				if(x>= frameOffsets.left && x<= frameOffsets.right)
-					MoveStates|=0x1;
-				if(y>= frameOffsets.top && y<= frameOffsets.bottom)
-					MoveStates|=0x2;
 				int touchMode = mOutTouchMode;
-				if(touchMode==1 && mViewDelegation==null) {
-					touchMode = 3;
+				if(fixed) {
+					touchMode = 1;
+				} else {
+					if(touchMode==1 && mViewDelegation==null)
+						touchMode = 3;
+					//检查内移动、外移动
+					if(x>= frameOffsets.left && x<= frameOffsets.right)
+						MoveStates|=0x1;
+					if(y>= frameOffsets.top && y<= frameOffsets.bottom)
+						MoveStates|=0x2;
 				}
-				if((MoveStates&0x3)!=0x3 &&
+				if(fixed || (MoveStates&0x3)!=0x3 &&
 						( x<= frameOffsets.left
 								|| x>= frameOffsets.right
 								|| y<= frameOffsets.top
@@ -379,28 +371,32 @@ public class CropView extends View {
 						}
 					}
 				}
-				activePntBdr = getActivePntBdr(MoveStates, x, y);
-				if(activePntBdr==-1 && (MoveStates&0x4)!=0 && touchMode==2) {
-					if((MoveStates&0x1)!=0) {
-						if(y<=frameOffsets.top) {
-							activePntBdr = 5;
-						} else if(y>=frameOffsets.bottom) {
-							activePntBdr = 7;
+				if(fixed) {
+					activePntBdr = -1;
+				} else {
+					activePntBdr = getActivePntBdr(MoveStates, x, y);
+					if(activePntBdr==-1 && (MoveStates&0x4)!=0 && touchMode==2) {
+						if((MoveStates&0x1)!=0) {
+							if(y<=frameOffsets.top) {
+								activePntBdr = 5;
+							} else if(y>=frameOffsets.bottom) {
+								activePntBdr = 7;
+							}
+						} else if((MoveStates&0x2)!=0) {
+							if(x<=frameOffsets.left) {
+								activePntBdr = 4;
+							} else if(x>=frameOffsets.right) {
+								activePntBdr = 6;
+							}
 						}
-					} else if((MoveStates&0x2)!=0) {
-						if(x<=frameOffsets.left) {
-							activePntBdr = 4;
-						} else if(x>=frameOffsets.right) {
-							activePntBdr = 6;
+						if(activePntBdr==-1) {
+							float signXY = Math.min(3, Math.signum(x - frameOffsets.centerX()) + Math.signum(y - frameOffsets.centerY()) + 2);
+							if(signXY==2 && frameOffsets.centerY()>y) {
+								signXY--;
+							}
+							activePntBdr = (int) signXY;
+							MoveStates&=~0x4;
 						}
-					}
-					if(activePntBdr==-1) {
-						float signXY = Math.min(3, Math.signum(x - frameOffsets.centerX()) + Math.signum(y - frameOffsets.centerY()) + 2);
-						if(signXY==2 && frameOffsets.centerY()>y) {
-							signXY--;
-						}
-						activePntBdr = (int) signXY;
-						MoveStates&=~0x4;
 					}
 				}
 			} break;
@@ -671,6 +667,35 @@ public class CropView extends View {
 				return 2+4;
 		}
 		return -1;
+	}
+	
+	int mPreset = -1;
+	
+	boolean fixed = true;
+	
+	/** 0=static ocr; 1=dynamic ocr; 2=static qr; 3=dynamic qr;  */
+	public void preset(int preset) {
+		if(mPreset!=preset) {
+			mPreset = preset;
+			fixed = preset==3;
+			if(preset==0 || preset==1) {
+				drawLaser = false;
+				drawCrossSight = true;
+				drawLocations = true;
+			}
+			if(preset==2) {
+				drawLaser = false;
+				drawCrossSight = false;
+				drawLocations = false;
+			}
+			if(preset==3) {
+				drawLaser = true;
+				drawCrossSight = false;
+				drawLocations = true;
+			}
+			invalidate();
+		}
+		CMN.Log("preset::", preset, fixed);
 	}
 	
 	public interface CropViewListener {
