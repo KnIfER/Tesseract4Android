@@ -86,14 +86,9 @@ public class DecodeManager {
 			top=sHeight-tmp-heightheight;
 		}
 		
-		if(left<0) left=0;
-		if(widthwidth+left>=sWidth) {
-			widthwidth=sWidth-1-left;
-		}
-		if(top<0) top=0;
-		if(heightheight+top>=sHeight) {
-			heightheight=sHeight-1-top;
-		}
+		if(left<0) left=0; if(top<0) top=0;
+		if(widthwidth+left>=sWidth) widthwidth=sWidth-1-left;
+		if(heightheight+top>=sHeight) heightheight=sHeight-1-top;
 		
 		if(widthwidth<=0||heightheight<=0) {
 			return null;
@@ -143,19 +138,16 @@ public class DecodeManager {
 				}
 			}
 			rotate=true;
-			//handler.setImage(rotatedData, heightheight, widthwidth, 1, heightheight);
 		}
 		if(rotate) {
 			int tmp = widthwidth;
 			widthwidth = heightheight;
 			heightheight = tmp;
 		}
+		
 		setImage(rotatedData, widthwidth, heightheight, 1, widthwidth);
-
-//		CMN.Log("handler.tess.getRegions().size()::", handler.tess.getConnectedComponents().getBoxRects().size());
 		
 		try {
-			//handler.activity.get().qr_frame.possibleTextRects = handler.tess.getConnectedComponents().getBoxRects();
 			Pixa words = tess.getWords();
 			if(words.size()>0) {
 				ArrayList<Rect> rects = words.getBoxRects();
@@ -163,10 +155,8 @@ public class DecodeManager {
 				Manager m = mManager;
 				m.UIData.frameView.possibleTextRects = rects;
 //				m.UIData.qrFrame.postInvalidate();
-				
-				//handler.activity.get().qr_frame.possibleTextRects = handler.tess.getTextlines().getBoxRects();
-				
-				int cX=widthwidth/2, cY=heightheight/2, dist=Integer.MAX_VALUE, boxIdx=0, boxDist;
+				int cX=widthwidth/2, cY=heightheight/2, dist=Integer.MAX_VALUE, boxIdx=-1, boxDist;
+				boolean aggressive=false;
 				Rect rc;
 				for (int i = 0; i < rects.size(); i++) {
 					rc = rects.get(i);
@@ -175,13 +165,17 @@ public class DecodeManager {
 						//m.UIData.qrFrame.possibleTextRects = Collections.singletonList(rc);
 						break;
 					}
-					int d = distSQ(rc.centerX()-cX, rc.centerY()-cY);
-					if(d<dist) {
-						dist = d;
-						boxIdx = i;
+					if(aggressive) {
+						int d = distSQ(rc.centerX()-cX, rc.centerY()-cY);
+						if(d<dist) {
+							dist = d;
+							boxIdx = i;
+						}
 					}
 				}
 				
+				if(boxIdx<0)
+					return null;
 				rc=rects.get(boxIdx);
 //				CMN.Log("decoding_ocr_rect::", rc.left, rc.top, rc.width()+"/"+widthwidth, rc.height()+"/"+heightheight);
 				if(rc.width() * rc.height() >= 500*500) {
@@ -198,10 +192,9 @@ public class DecodeManager {
 				int wordHeight = rc.height()+pad*2;
 				left = rc.left-pad;
 				top = rc.top-pad;
-				if(left+wordWidth>=widthwidth) left=widthwidth-wordWidth-1;
-				if(top+wordHeight>=heightheight) top=heightheight-wordHeight-1;
-				if(left<0) left=0;
-				if(top<0) top=0;
+				if(left<0) left=0; if(top<0) top=0;
+				if(left+wordWidth>=widthwidth) wordWidth=widthwidth-left-1;
+				if(top+wordHeight>=heightheight) wordHeight=heightheight-top-1;
 //				byte[] wordData = new byte[wordWidth*wordHeight];
 //				for(int i=0; i<wordWidth; i++ )
 //				{
@@ -211,8 +204,11 @@ public class DecodeManager {
 //					}
 //				}
 //				setImage(wordData, wordWidth, wordHeight, 1, wordWidth);
-				tess.setRectangle(left, top, wordWidth, wordHeight);
-				return new Result(tess.getUTF8Text(), null, null, BarcodeFormat.QR_CODE);
+				if(wordWidth>0 && wordHeight>0) {
+					tess.setRectangle(left, top, wordWidth, wordHeight);
+					//tess.getHOCRText(0);
+					return new Result(tess.getUTF8Text(), null, null, BarcodeFormat.QR_CODE);
+				}
 			}
 			else {
 				words.recycle();
@@ -227,6 +223,7 @@ public class DecodeManager {
 	long lastImageId;
 	/** Set OCR Image */
 	private void setImage(byte[] data, int w, int h, int bpp, int bpl) {
+		//getTess().stop();
 		getTess().setImage(data, w, h, bpp, bpl);
 		if(lastImageId!=0) lastImageId=0;
 	}
