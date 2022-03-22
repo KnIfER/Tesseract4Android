@@ -53,7 +53,8 @@ public class TessBaseAPI {
 
 	static {
 		System.loadLibrary("jpeg");
-		System.loadLibrary("png");
+		//https://stackoverflow.com/questions/20698905/unsatisfiedlinkerror-in-android-4-4-libdevil-cannot-locate-symbol-png-set-longj
+		System.loadLibrary("pngx");
 		System.loadLibrary("leptonica");
 		System.loadLibrary("tesseract");
 
