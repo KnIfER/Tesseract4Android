@@ -29,6 +29,7 @@ import androidx.annotation.WorkerThread;
 import com.googlecode.leptonica.android.Pix;
 import com.googlecode.leptonica.android.Pixa;
 import com.googlecode.leptonica.android.ReadFile;
+import com.googlecode.tesseraction.CMN;
 
 import java.io.File;
 import java.lang.annotation.Retention;
@@ -407,7 +408,7 @@ public class TessBaseAPI {
 						Map<String, String> config) {
 		if (mRecycled)
 			throw new IllegalStateException();
-
+		
 		if (datapath == null) {
 			datapath = File.separator+"CONTENT"+File.separator;
 		} else {

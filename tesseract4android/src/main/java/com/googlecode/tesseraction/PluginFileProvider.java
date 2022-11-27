@@ -58,14 +58,14 @@ public class PluginFileProvider extends ContentProvider {
 	
 	@Override
 	public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
-		// TODO Auto-generated method stub
-		CMN.Log("openAssetFile");
+		CMN.Log("PluginFileProvider::openAssetFile", uri, mode, uri.getPath());
+		
 		return super.openAssetFile(uri, mode);
 	}
 	
 	@Override
 	public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-		//CMN.Log("PluginFileProvider_openFile::", uri);
+		CMN.Log("PluginFileProvider::openFile::", uri);
 		File file = new File(getContext().getExternalFilesDir(null), uri.getPath());
 		if (file.exists()) {
 			//CMN.Log("PluginFileProvider_openFile::exists");
