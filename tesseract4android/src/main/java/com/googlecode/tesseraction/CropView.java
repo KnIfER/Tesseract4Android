@@ -13,8 +13,11 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
+
+import androidx.annotation.Nullable;
 
 import com.google.zxing.ResultPoint;
 import com.google.zxing.ResultPointCallback;
@@ -42,10 +45,6 @@ public class CropView extends View {
 	private static final int MAX_RESULT_POINTS = 20;
 	private static final int POINT_SIZE = 6;
 	private int density = (int) this.getResources().getDisplayMetrics().density;  //屏幕像素密度
-	/** 视图的总高 */
-	private float mViewHeight;
-	/** 视图的总宽 */
-	private float mViewWith;
 	/** 设置方框的宽度，默认200dp */
 	private float mFrameSizeX = 0;
 	/** 设置方框的高度 ，默认200dp*/
@@ -61,10 +60,13 @@ public class CropView extends View {
 	/** 边框四个边的坐标，相对于屏幕左上角，每边只保留x, y中有效的一个坐标: <br> left (x), top (y), right (x), bottom (y) */
 	public final RectF frameOffsets = new RectF();
 	
+	/** 视图的总宽与总高 */
+	public final RectF viewFrame = new RectF();
+	
 	/** 是否同时允许双指分别调整边框大小  */
 	public boolean b2FingerFrame = true;
 	
-	/** moving states flag. |0x1=InnerMoveX|  |0x2=InnerMoveY|  |0x4=OuterMove|  |0x8=双指操作|  |0x10=再初始化| <br>
+	/** moving states flag. |0x1=InnerMoveX|  |0x2=InnerMoveY|  |0x4=OuterMove|  |0x8=双指操作|  |0x10=再初始化| |0x20=双指操作，免疫单指| <br>
 	 **/
 	private int MoveStates;
 	
@@ -72,12 +74,15 @@ public class CropView extends View {
 	private int mGridShowType = 0;
 	
 	/** 外部触摸处理方式 0=不处理，1=移动/缩放背后的view，2=拖动边框的某一边，3=移动边框 */
-	private int mOutTouchMode = 3;
+	private int tOutMode = 1;
+	
+	/** true=框内触摸同框外，false=框内移框 */
+	private boolean tInOut = false;
 	
 	/** 双指操作时，储存第二指的ID。安卓多点触摸，落点 index 会变化，而 ID 不变。  */
 	private int PinchTouchId;
 	
-	public View mViewDelegation;
+	public View mView;
 	
 	Paint framePaint;
 	Paint frameEraser;
@@ -85,7 +90,8 @@ public class CropView extends View {
 	
 	private int resultPointColor; // 特征点的颜色
 	private final List<ResultPoint> possibleResultPoints = new ArrayList<>(5);
-	public List<Rect> possibleTextRects;// = new ArrayList<>(256);
+	private ArrayList<Rect> textRects_ = new ArrayList<>(1);
+	public List<Rect> textRects;
 	private final List<ResultPoint> lastPossibleResultPoints = new ArrayList<>(5);
 	
 	
@@ -102,6 +108,9 @@ public class CropView extends View {
 	private ResultPointCollector mResultPointCollector;
 	
 	private boolean animating=false;
+	private OnClickListener mClickListener;
+	
+	GestureDetector detector;
 	
 	
 	/**  构造   */
@@ -133,6 +142,16 @@ public class CropView extends View {
 		paint.setAlpha(CURRENT_POINT_OPACITY);
 		
 		mskColor = getBackground();
+		
+		detector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener(){
+			@Override
+			public boolean onSingleTapUp(MotionEvent e) {
+				if(mClickListener!=null) {
+					mClickListener.onClick(CropView.this);
+				}
+				return super.onSingleTapUp(e);
+			}
+		});
 	}
 	
 	/**  初始化布局   */
@@ -140,24 +159,24 @@ public class CropView extends View {
 	protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
 		super.onLayout(changed, left, top, right, bottom);
 		if(changed) {
-			mViewWith = this.getWidth();
-			mViewHeight = this.getHeight();
+			viewFrame.right = getWidth();
+			viewFrame.bottom = getHeight();
 			//初始化四个边的坐标
 			if(frameOffsets.width()<=0) {
 				float mFrameSize = mFrameSizeX<=0?200 * density :mFrameSizeX;
-				frameOffsets.left = (mViewWith - mFrameSize) / 2;
-				frameOffsets.right = (mViewWith + mFrameSize) / 2;
+				frameOffsets.left = (viewFrame.right - mFrameSize) / 2;
+				frameOffsets.right = (viewFrame.right + mFrameSize) / 2;
 			}
 			if(frameOffsets.height()<=0) {
 				float mFrameSize = mFrameSizeY<=0?200 * density :mFrameSizeY;
-				frameOffsets.top = (mViewHeight - mFrameSize) / 2;
-				frameOffsets.bottom = (mViewHeight + mFrameSize) / 2;
+				frameOffsets.top = (viewFrame.bottom - mFrameSize) / 2;
+				frameOffsets.bottom = (viewFrame.bottom + mFrameSize) / 2;
 			}
 		}
 	}
 	
 	public void setViewDelegation(View viewToManipulate) {
-		mViewDelegation = viewToManipulate;
+		mView = viewToManipulate;
 		if(viewToManipulate!=null) {
 			viewToManipulate.setPivotX(0);
 			viewToManipulate.setPivotY(0);
@@ -166,82 +185,70 @@ public class CropView extends View {
 	
 	@Override
 	protected void onDraw(Canvas canvas) {
-		if(!cropping) {
-			return;
+		RectF frame = cropping?frameOffsets:viewFrame;
+		if(cropping) {
+			framePaint.setStrokeWidth(fixed?mBorderStrokeWidth:mCornerStrokeWidth);
+			framePaint.setStyle(Paint.Style.STROKE);
+			// 画边框
+			canvas.drawRect(frameOffsets, framePaint);
+			canvas.drawRect(frameOffsets, frameEraser);
+			// 画激光
+			long delay = ANIMATION_DELAY;
+			if(drawLaser) {
+				// laser blade hen hen hah hyi！
+				lowerLaserLimit = (int) (frame.bottom-15);
+				drawLaser(canvas, frame);
+				if(laserTop==lowerLaserLimit) {
+					laserTop =(int) frame.top;
+					//delay=350L;
+					delay=650L;
+				}
+			} else {
+				delay = 160L;
+			}
+			if(drawLocations && delay<300) {
+				// 绘制点云
+				synchronized (possibleResultPoints) {
+					if (!lastPossibleResultPoints.isEmpty()) {
+						drawPointsCloud(frame, canvas, lastPossibleResultPoints, POINT_SIZE / 2.0f);
+						lastPossibleResultPoints.clear();
+					}
+					if (!possibleResultPoints.isEmpty()) {
+						drawPointsCloud(frame, canvas, possibleResultPoints, POINT_SIZE);
+						lastPossibleResultPoints.addAll(possibleResultPoints);
+						possibleResultPoints.clear();
+					}
+				}
+			}
+			if(animating&&(drawLocations||drawLaser)) {
+				// Request another update at the animation interval
+				// , but only repaint the laser line, not the entire viewfinder mask.
+				postInvalidateDelayed(delay, (int)(frame.left - POINT_SIZE),
+						(int)(frame.top - POINT_SIZE), (int)(frame.right + POINT_SIZE),
+						(int)(frame.bottom + POINT_SIZE));
+			}
 		}
-		framePaint.setStrokeWidth(fixed?mBorderStrokeWidth:mCornerStrokeWidth);
-		framePaint.setStyle(Paint.Style.STROKE);
-		// 画边框
-		canvas.drawRect(frameOffsets, framePaint);
-		canvas.drawRect(frameOffsets, frameEraser);
-		// 画激光和词框
+		
+		// 画词框
 		{
-			RectF frame = frameOffsets; // 取景框
-			if (frame == null) return;
-			{
-				long delay = ANIMATION_DELAY;
-				if(drawLaser) {
-					// laser blade hen hen hah hyi！
-					lowerLaserLimit = (int) (frame.bottom-15);
-					drawLaser(canvas, frame);
-					if(laserTop==lowerLaserLimit) {
-						laserTop =(int) frame.top;
-						//delay=350L;
-						delay=650L;
-					}
-				} else {
-					delay = 160L;
+			if(textRects !=null) {
+				if(!cropping) {
+					viewFrame.left = mView.getTranslationX();
+					viewFrame.top = mView.getTranslationY();
 				}
-				if(drawLocations && delay<300) {
-					// 绘制点云
-					synchronized (possibleResultPoints) {
-						if (!lastPossibleResultPoints.isEmpty()) {
-							drawPointsCloud(frame, canvas, lastPossibleResultPoints, POINT_SIZE / 2.0f);
-							lastPossibleResultPoints.clear();
-						}
-						if (!possibleResultPoints.isEmpty()) {
-							drawPointsCloud(frame, canvas, possibleResultPoints, POINT_SIZE);
-							lastPossibleResultPoints.addAll(possibleResultPoints);
-							possibleResultPoints.clear();
-						}
-					}
-				}
-				List<Rect> rects = possibleTextRects;
-				if(rects!=null) {
-					float frameHeightPlusLeft = frame.left+frame.height();
-					for (Rect rect : rects) {
-//						float x = rect.left * a.scale;
-//						float y = rect.top * a.scale;
-//						if(a.isPortrait) {
-//
-//
-////						canvas.drawRect(frame.left+frame.width()-y, frame.top+x
-////								, frame.left+frame.width()-y + rect.height() * a.scale
-////								, frame.top+x + rect.width() * a.scale
-////								, pointpainter);
-//						} else {
-////						canvas.drawRect(frame.left+x, frame.top+y, rect.width(), rect.height(), pointpainter);
-//						}
-						//canvas.drawRect(rect, rectpainter);
-						float scale = /*a.scale * */mViewDelegation.getScaleX();
-						canvas.drawRect(
-								frame.left+rect.left*scale
-								,frame.top+rect.top*scale
-								,frame.left+rect.right*scale
-								,frame.top+rect.bottom*scale
-								, rectPaint);
-					}
-					//CMN.Log("rects.size()::", rects.size());
-				}
-				if(animating&&(drawLocations||drawLaser)) {
-					// Request another update at the animation interval
-					// , but only repaint the laser line, not the entire viewfinder mask.
-					postInvalidateDelayed(delay, (int)(frame.left - POINT_SIZE),
-							(int)(frame.top - POINT_SIZE), (int)(frame.right + POINT_SIZE),
-							(int)(frame.bottom + POINT_SIZE));
+				for (Rect rect : textRects) {
+					float scale = /*a.scale * */mView.getScaleY();
+					canvas.drawRect(
+							frame.left+rect.left*scale
+							,frame.top+rect.top*scale
+							,frame.left+rect.right*scale
+							,frame.top+rect.bottom*scale
+							, rectPaint);
 				}
 			}
 		}
+		
+		if(!cropping) return;
 		
 		final int temp1 = (mCornerStrokeWidth - mBorderStrokeWidth) / 2;
 		float x,y;
@@ -316,7 +323,7 @@ public class CropView extends View {
 	}
 	
 	/** 上次按下的X、Y位置 */
-	private float lastX, lastY, orgX, orgY;
+	float lastX, lastY, orgX, orgY;
 	
 	/** 用户按下的点
 	 * 点阵示意： <br>
@@ -346,12 +353,12 @@ public class CropView extends View {
 			case MotionEvent.ACTION_DOWN:{
 				orgX = lastX = x;
 				orgY = lastY = y;
-				int touchMode = mOutTouchMode;
+				int touchMode = tOutMode;
 				boolean fnc = fixed || !cropping;
 				if(fnc) {
 					touchMode = 1;
 				} else {
-					if(touchMode==1 && mViewDelegation==null)
+					if(touchMode==1 && mView ==null)
 						touchMode = 3;
 					//检查内移动、外移动
 					if(x>= frameOffsets.left && x<= frameOffsets.right)
@@ -369,9 +376,9 @@ public class CropView extends View {
 					} else if(touchMode!=0){
 						// 在框外
 						MoveStates|=0x4;
-						if(mViewDelegation!=null) {
-							baseViewX = mViewDelegation.getTranslationX();
-							baseViewY = mViewDelegation.getTranslationY();
+						if(mView !=null) {
+							baseViewX = mView.getTranslationX();
+							baseViewY = mView.getTranslationY();
 						}
 						if(mGridShowType==2) {
 							invalidate();
@@ -380,7 +387,8 @@ public class CropView extends View {
 				}
 				if(fnc) {
 					activePntBdr = -1;
-				} else {
+				}
+				else {
 					activePntBdr = getActivePntBdr(MoveStates, x, y);
 					if(activePntBdr==-1 && (MoveStates&0x4)!=0 && touchMode==2) {
 						if((MoveStates&0x1)!=0) {
@@ -404,6 +412,15 @@ public class CropView extends View {
 							activePntBdr = (int) signXY;
 							MoveStates&=~0x4;
 						}
+					}
+				}
+				if(tInOut && activePntBdr==-1 && (MoveStates&0x3)==0x3) {
+					//框内触摸同框外
+					MoveStates &= ~0x3;
+					MoveStates |= 0x4;
+					if(mView !=null) {
+						baseViewX = mView.getTranslationX();
+						baseViewY = mView.getTranslationY();
 					}
 				}
 			} break;
@@ -442,8 +459,8 @@ public class CropView extends View {
 					}
 					x2 = event.getX(pix);
 					y2 = event.getY(pix);
-					if(activePntBdr != -1) {
-						if ((MoveStates & 0x10) != 0) {
+					if((MoveStates & 0x10) != 0) {
+						if (activePntBdr>=0) {
 							lastX2 = x2;
 							lastY2 = y2;
 							int ms=0;
@@ -452,7 +469,10 @@ public class CropView extends View {
 							if(y>= frameOffsets.top && y<= frameOffsets.bottom)
 								ms|=0x2;
 							activePntBdr2 = getActivePntBdr(ms, x2, y2);
+							if(activePntBdr2<0)
+								MoveStates |= 0x20;
 						}
+						else activePntBdr2=-1;
 					}
 				}
 				// 初始化移动、缩放操作的起始状态
@@ -460,11 +480,15 @@ public class CropView extends View {
 					if((MoveStates&0x8)==0&&pc==1 || (MoveStates&0x8)!=0&&pc>1) { //sanity check
 						MoveStates &= ~0x10;
 						baseScaleT = scaleT;
-						if(mViewDelegation!=null) {
-							baseViewX = mViewDelegation.getTranslationX();
-							baseViewY = mViewDelegation.getTranslationY();
-							w = mViewDelegation.getWidth();
-							h = mViewDelegation.getHeight();
+						if(mView !=null) {
+							if((MoveStates&0x8)!=0&&pc>1) {
+								baseScaleT = mView.getScaleX();
+								CMN.Log("初始化baseScaleT::", baseScaleT);
+							}
+							baseViewX = mView.getTranslationX();
+							baseViewY = mView.getTranslationY();
+							w = mView.getWidth();
+							h = mView.getHeight();
 						}
 						if((MoveStates&0x8)!=0) {
 							mPinchOrgX = (x+x2)/2.f;
@@ -486,67 +510,68 @@ public class CropView extends View {
 				int actPntBdr = activePntBdr;
 				int actFlag=0; // 临时标志，|0x1 继续处理双指调整边框大小|  |0x2 需要重绘|
 				do {
+					boolean b1F = (MoveStates&0x20)==0 || activePntBdr2>=0;
 					/* 缩放边框的边与角 */
-					if(activePntBdr != -1) {
+					if(b1F && activePntBdr>=0) {
 						float tmpX, tmpY;
 						switch (actPntBdr) {
 							// 0-3 : 角缩放状态下, 按住某一个点，该点的坐标改变，其他2个点坐标跟着改变，对点坐标不变
 							case 0:
 								tmpX = frameOffsets.left + offsetX;
 								tmpY = frameOffsets.top + offsetY;
-								if (checkOffset(tmpX, frameOffsets.right - tmpX, mViewWith))
+								if (checkOffset(tmpX, frameOffsets.right - tmpX, viewFrame.right))
 									frameOffsets.left = tmpX;
-								if (checkOffset(tmpY, frameOffsets.bottom - tmpY, mViewHeight))
+								if (checkOffset(tmpY, frameOffsets.bottom - tmpY, viewFrame.bottom))
 									frameOffsets.top = tmpY;
 								break;
 							case 1:
 								tmpX = frameOffsets.right + offsetX;
 								tmpY = frameOffsets.top + offsetY;
-								if (checkOffset(tmpX, tmpX - frameOffsets.left, mViewWith))
+								if (checkOffset(tmpX, tmpX - frameOffsets.left, viewFrame.right))
 									frameOffsets.right = tmpX;
-								if (checkOffset(tmpY, frameOffsets.bottom - tmpY, mViewHeight))
+								if (checkOffset(tmpY, frameOffsets.bottom - tmpY, viewFrame.bottom))
 									frameOffsets.top = tmpY;
 								break;
 							case 2:
 								tmpX = frameOffsets.left + offsetX;
 								tmpY = frameOffsets.bottom + offsetY;
-								if (checkOffset(tmpX, frameOffsets.right - tmpX, mViewWith))
+								if (checkOffset(tmpX, frameOffsets.right - tmpX, viewFrame.right))
 									frameOffsets.left = tmpX;
-								if (checkOffset(tmpY, tmpY - frameOffsets.top, mViewHeight))
+								if (checkOffset(tmpY, tmpY - frameOffsets.top, viewFrame.bottom))
 									frameOffsets.bottom = tmpY;
 								break;
 							case 3:
 								tmpX = frameOffsets.right + offsetX;
 								tmpY = frameOffsets.bottom + offsetY;
-								if (checkOffset(tmpX, tmpX - frameOffsets.left, mViewWith))
+								if (checkOffset(tmpX, tmpX - frameOffsets.left, viewFrame.right))
 									frameOffsets.right = tmpX;
-								if (checkOffset(tmpY, tmpY - frameOffsets.top, mViewHeight))
+								if (checkOffset(tmpY, tmpY - frameOffsets.top, viewFrame.bottom))
 									frameOffsets.bottom = tmpY;
 								break;
 							// 4-7 拖动哪一条边
 							case 4: {
 								tmpX = frameOffsets.left + offsetX;
-								if (checkOffset(tmpX, frameOffsets.right - tmpX, mViewWith))
+								if (checkOffset(tmpX, frameOffsets.right - tmpX, viewFrame.right))
 									frameOffsets.left = tmpX;
 							} break;
 							case 5: {
 								tmpY = frameOffsets.top + offsetY;
-								if (checkOffset(tmpY, frameOffsets.bottom - tmpY, mViewHeight))
+								if (checkOffset(tmpY, frameOffsets.bottom - tmpY, viewFrame.bottom))
 									frameOffsets.top = tmpY;
 							} break;
 							case 6: {
 								tmpX = frameOffsets.right + offsetX;
-								if (checkOffset(tmpX, tmpX - frameOffsets.left, mViewWith))
+								if (checkOffset(tmpX, tmpX - frameOffsets.left, viewFrame.right))
 									frameOffsets.right = tmpX;
 							} break;
 							case 7: {
 								tmpY = frameOffsets.bottom + offsetY;
-								if (checkOffset(tmpY, tmpY - frameOffsets.top, mViewHeight))
+								if (checkOffset(tmpY, tmpY - frameOffsets.top, viewFrame.bottom))
 									frameOffsets.bottom = tmpY;
 							} break;
 						}
 						if (b2FingerFrame && (MoveStates & 0x8) != 0
-								&& activePntBdr2 != -1
+								&& activePntBdr2>=0
 								&& (actFlag & 0x1) == 0
 						) { // 再来一次！
 							actPntBdr = activePntBdr2;
@@ -572,19 +597,19 @@ public class CropView extends View {
 						//新的两点间中点
 						mPinchPosX = (x+x2)/2.f ;// 计算两点的中点
 						mPinchPosY = (y+y2)/2.f ;// 计算两点的中点
-						if(mViewDelegation!=null) {
-							mViewDelegation.setTranslationX(baseViewX + mPinchPosX - mPinchOrgX +(scaleT/baseScaleT-1)* baseViewX -(scaleT/baseScaleT-1)* mPinchOrgX);
-							mViewDelegation.setTranslationY(baseViewY + mPinchPosY - mPinchOrgY +(scaleT/baseScaleT-1)* baseViewY -(scaleT/baseScaleT-1)* mPinchOrgY);
-							mViewDelegation.setScaleX(scaleT); // infinity
-							mViewDelegation.setScaleY(scaleT);
+						if(mView !=null) {
+							mView.setTranslationX(baseViewX + mPinchPosX - mPinchOrgX +(scaleT/baseScaleT-1)* baseViewX -(scaleT/baseScaleT-1)* mPinchOrgX);
+							mView.setTranslationY(baseViewY + mPinchPosY - mPinchOrgY +(scaleT/baseScaleT-1)* baseViewY -(scaleT/baseScaleT-1)* mPinchOrgY);
+							mView.setScaleX(scaleT); // infinity
+							mView.setScaleY(scaleT);
 						}
 					}
 					/* 框内移动 */
-					else if((MoveStates&0x3)==0x3){
+					else if(b1F && (MoveStates&0x3)==0x3){
 						//防止溢出
-						if(frameOffsets.top + offsetY<0 || frameOffsets.bottom + offsetY> mViewHeight)
+						if(frameOffsets.top + offsetY<0 || frameOffsets.bottom + offsetY> viewFrame.bottom)
 							offsetY=0;
-						if(frameOffsets.left + offsetX<0 || frameOffsets.right + offsetX> mViewWith)
+						if(frameOffsets.left + offsetX<0 || frameOffsets.right + offsetX> viewFrame.right)
 							offsetX=0;
 						//更新四个边的坐标
 						frameOffsets.left += offsetX;
@@ -596,9 +621,11 @@ public class CropView extends View {
 						actFlag |= 0x2;
 					}
 					/* 框外移动 */
-					else if((MoveStates&0x4)!=0 && mViewDelegation!=null){
-						mViewDelegation.setTranslationX(baseViewX + event.getX() - orgX);
-						mViewDelegation.setTranslationY(baseViewY + event.getY() - orgY);
+					else if((!b1F || (MoveStates&0x4)!=0) && mView !=null){
+						mView.setTranslationX(baseViewX + event.getX() - orgX);
+						mView.setTranslationY(baseViewY + event.getY() - orgY);
+						if(textRects!=null)
+							actFlag |= 0x2;
 					}
 					break;
 				} while ((actFlag&0x1)!=0);
@@ -610,6 +637,9 @@ public class CropView extends View {
 				MoveStates = 0;
 				if(mGridShowType==2) {
 					invalidate();
+				}
+				if(mClickListener!=null) {
+					mClickListener.onClick(CropView.this);
 				}
 				break;
 		}
@@ -642,7 +672,7 @@ public class CropView extends View {
 	private int getActivePntBdr(int moveStates,float x, float y) {
 		// 落于方框的中点圆免疫边缩放、角缩放。(方框过小时有效)
 		if (mCornerSize-1.5f >= dist(x- frameOffsets.centerX(), y- frameOffsets.centerY())) {
-			return -1;
+			return -100;
 		}
 		// 角
 		float theta = mCornerSize*1.25f;
@@ -718,6 +748,19 @@ public class CropView extends View {
 		return cropping;
 	}
 	
+	public void setTextRect(Rect rc) {
+		if(rc==null) {
+			textRects = null;
+		} else {
+			textRects_.clear();
+			textRects_.add(rc);
+			textRects = textRects_;
+			rectPaint.setStyle(Paint.Style.FILL);
+			rectPaint.setColor(0x55FFFF00);
+		}
+		postInvalidate();
+	}
+	
 	public interface CropViewListener {
 		void onCropFrameChanged(CropView cropView, boolean resize);
 	}
@@ -740,7 +783,7 @@ public class CropView extends View {
 	
 	/** 外部触摸处理方式 0=不处理，1=移动/缩放背后的view，2=拖动边框的某一边，3=移动边框 */
 	public void setOutsideTouchMode(int mode) {
-		this.mOutTouchMode = mode;
+		this.tOutMode = mode;
 	}
 	
 	public void pause() {
@@ -823,5 +866,10 @@ public class CropView extends View {
 		}
 		laserRect.set(frame.left, laserTop, frame.right, laserTop + 30);
 		canvas.drawBitmap(laserBit, null, laserRect, paint);
+	}
+	
+	@Override
+	public void setOnClickListener(@Nullable OnClickListener listener) {
+		super.setOnClickListener(this.mClickListener=listener);
 	}
 }

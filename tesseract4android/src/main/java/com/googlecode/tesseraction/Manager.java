@@ -16,8 +16,10 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
+import android.hardware.Camera;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Message;
@@ -32,6 +34,7 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -40,6 +43,7 @@ import androidx.databinding.DataBindingUtil;
 import com.google.zxing.Result;
 import com.googlecode.tesseraction.databinding.ActivityQrBinding;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -71,11 +75,12 @@ public class Manager implements View.OnClickListener {
 	RectF framingRect=new RectF();
 	
 	final DecodeManager dMan;
+	int lastType=-1;
 	private DecodeThread handlerThread;
 	private boolean requestedResetHints;
 	
 	private int lastRequestCode;
-	boolean hasStaticImg;
+	boolean viewingImg;
 	
 	public Manager() {
 		dMan = new DecodeManager(this);
@@ -114,14 +119,15 @@ public class Manager implements View.OnClickListener {
 		root = UIData.getRoot();
 		readScreenOrientation(getContext(), false);
 		
-		UIData.frameView.setViewDelegation(UIData.surfaceHolder);
+		UIData.frameView.setViewDelegation(UIData.photoView);
 		
 		cameraManager = new QRCameraManager(this);
-		setFramingRect(UIData.frameView.getFrameRect());
+		setRect(UIData.frameView.getFrameRect());
 		
 		setOnClickListenersOneDepth(UIData.toolbarContent, this, 1);
 		setOnClickListenersOneDepth(UIData.toast, this, 1);
 		setOnClickListenersOneDepth(UIData.navHorBtns, this, 1);
+		UIData.frameView.setOnClickListener(this);
 	}
 	
 	AlertDialog MainMenuDlg;
@@ -145,7 +151,6 @@ public class Manager implements View.OnClickListener {
 							tryOpenCamera(0|(0x1<<8), activity, requestCode);
 						break;
 						case 2:
-						
 						break;
 						case 3:
 							tryOpenCamera(1, activity, requestCode);
@@ -174,7 +179,45 @@ public class Manager implements View.OnClickListener {
 		//MainMenuDlg.setCanceledOnTouchOutside(false);
 	}
 	
+	public boolean onBack() {
+		if(viewingImg && lastType!=-1) {
+			viewingImg = false;
+			tryOpenCamera(lastType, activity, lastRequestCode);
+			return true;
+		}
+		return false;
+	}
+	
 	int[] UIStates = new int[15];
+	
+	int[] BtnImg = new int[] {
+		R.drawable.ic_baseline_crop_24
+		,R.drawable.ic_baseline_play_arrow_24
+		,R.drawable.ic_rects
+	};
+	int[] BtnSt = new int[] {
+		R.drawable.ic_baseline_crop_24
+		,R.drawable.ic_baseline_photo_camera_24
+	};
+	int[] BtnDy = new int[] {
+		R.drawable.ic_baseline_crop_24
+		,R.drawable.ic_baseline_photo_camera_24
+		,R.drawable.ic_rects
+	};
+	
+	public static void setVisible(View v, boolean vis){
+		v.setVisibility(vis?View.VISIBLE:View.GONE);
+	}
+	
+	public void resetBtns() {
+		int decodeType = dMan.decodeType;
+		setVisible(UIData.cropBtn, true);
+		setVisible(UIData.playBtn, viewingImg);
+		setVisible(UIData.cameraBtn, !viewingImg);
+		setVisible(UIData.rectsBtn, decodeType==0 && (viewingImg||cameraManager.realtime));
+		setVisible(UIData.laserBtn, decodeType==1 && !viewingImg && cameraManager.realtime);
+	}
+	
 	public void refreshUI() {
 		int alpha=cameraManager.isPreviewing()?255:128;
 		if(UIStates[0]!=alpha) {
@@ -189,8 +232,9 @@ public class Manager implements View.OnClickListener {
 			UIStates[1]=realTime_QROCR;
 			
 		}
-		UIData.frameView.setCropping(false);
-		UIData.frameView.preset(decodeType<<1|(cameraManager.realtime?1:0));
+		int ui_pr=decodeType<<1|(cameraManager.realtime?1:0);
+		UIData.frameView.preset(ui_pr);
+		resetBtns();
 //		LayerDrawable ld = (LayerDrawable) UIData.torch.getDrawable();
 //		ld.getDrawable(0).setAlpha(torchLight?255:64);
 //		ld.getDrawable(1).setAlpha(torchLight?255:128);
@@ -219,32 +263,67 @@ public class Manager implements View.OnClickListener {
 					}
 				}
 			} break;
-			case R.id.camera:{
+			case R.id.frame_view: {
+				CMN.Log("click!!!", UIData.frameView.lastX, UIData.frameView.lastY);
+//				new Thread(new Runnable() {
+//					@Override
+//					public void run() {
+//						dMan.decodeWord();
+//					}
+//				}).start();
+
+//				getHandler().removeMessages(R.id.decode);
+//				Message message = getHandler().ready().obtainMessage(R.id.decode, bitmap);
+//				message.arg1=R.id.decode3;
+//				message.sendToTarget();
+			} break;
+			/* turn on/off camera */
+			case R.id.camera: {
 				if(cameraManager.isPreviewing()) {
 					suspensed = true;
 					pauseCamera();
+					if(bitmap!=null) {
+						applyImageSize(false);
+						viewingImg = true;
+					}
 				} else {
 					suspensed = false;
 					resumeCamera();
+					if(viewingImg) {
+						applyPreviewSize();
+						viewingImg = false;
+					}
 				}
 				refreshUI();
 				opt.setRememberedLaunchCamera(false);
 			} break;
 			case R.id.cameraBtn:{
 				CMN.Log("takePicture!!");
-//				cameraManager.camera.takePicture(new Camera.ShutterCallback() {
-//					@Override
-//					public void onShutter() {
-//						suspensed = true;
-//					}
-//				}, null, null, new Camera.PictureCallback() {
-//					@Override
-//					public void onPictureTaken(byte[] data, Camera camera) {
-//						Bitmap bm = BitmapFactory.decodeStream(new ByteArrayInputStream(data));
-//						UIData.imageView.setImageBitmap(bm);
-//					}
-//				});
-			
+				try {
+					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+						cameraManager.camera.enableShutterSound(false);
+					}
+				} catch (Exception ignored) { }
+				cameraManager.camera.takePicture(new Camera.ShutterCallback() {
+					@Override
+					public void onShutter() {
+						suspensed = true;
+					}
+				}, null, null, new Camera.PictureCallback() {
+					@Override
+					public void onPictureTaken(byte[] data, Camera camera) {
+						Bitmap bm = BitmapFactory.decodeStream(new ByteArrayInputStream(data));
+						int bw=bm.getWidth(),bh=bm.getHeight();
+						if(bw>0 && bh>0) {
+							if(bw>bh ^ sWidth>sHeight) {
+								Matrix matrix = new Matrix();
+								matrix.postRotate(90);
+								bm = Bitmap.createBitmap(bm, 0, 0, bw, bh, matrix, true);
+							}
+						}
+						setImage(bm, true);
+					}
+				});
 			} break;
 			case R.id.playBtn:{
 				decode();
@@ -333,11 +412,12 @@ public class Manager implements View.OnClickListener {
 	/** try with camera permission.
 	 * @param decodeType  see {@link DecodeManager#decodeType} */
 	public void tryOpenCamera(int decodeType, Activity activity, int requestCode) {
+		lastType = decodeType;
 		dMan.decodeType = decodeType & 0xF;
 		this.lastRequestCode = requestCode;
 		boolean rl=cameraManager.realtime=((decodeType>>8)&1)!=0;
-		UIData.frameView.possibleTextRects=null;
-		if(!hasStaticImg||rl) {
+		UIData.frameView.textRects =null;
+		if(!viewingImg ||rl) {
 			if(activity==null) activity=this.activity;
 			if(activity==null) {
 				openCamera();
@@ -348,6 +428,10 @@ public class Manager implements View.OnClickListener {
 			}
 			if(rl) {
 				startPreview();
+			}
+			if(viewingImg) {
+				UIData.imageView.setVisibility(View.GONE);
+				viewingImg = false;
 			}
 		}
 		refreshUI();
@@ -513,29 +597,18 @@ public class Manager implements View.OnClickListener {
 	private final int Match_Auto=2;
 	private final int Match_None=3;
 	
-	float pendingTransX = 0;
-	float pendingTransY = 0;
-	int pendingWidth = 0;
-	int pendingHeight = 0;
-	float pendingScale = 0;
 	int pendingMatchType = -1;
 	int preferedMatchType = -1;
 	
-	private int mVideoVisibleHeight = 0;
-	private int mVideoVisibleWidth = 0;
-	
-	int mVideoHeight = 0;
-	int mVideoWidth = 0;
 	boolean mVideoWidthReq;
 	
 	public int sWidth;
 	public int sHeight;
 	
-	/** 测试用，试试视频播放器的fit_center模式，使画面整个纳入界面范围。
-	 * 		进入分屏模式以查看效果。*/
+	/** overview mode */
 	private final static boolean videoMode=false;
 	
-	public void onNewVideoViewLayout(boolean rotate, int width, int height) {
+	public void fitPreview(int width, int height, boolean rotate, boolean fitCenter, boolean isPhoto) {
 		CMN.Log("onNewVideoViewLayout", width, height, isPortrait);
 		if(rotate && isPortrait) {
 			int tmp = width;
@@ -548,124 +621,94 @@ public class Manager implements View.OnClickListener {
 		}
 		if (width * height == 0) return;
 		//if(mVideoWidthReq || mVideoWidth != width || mVideoHeight != height){
-		mVideoWidth = width;
-		mVideoHeight = height;
-		mVideoVisibleWidth = mVideoWidth;
-		mVideoVisibleHeight = mVideoHeight;
-		refreshSVLayout();
-		mVideoWidthReq=false;
-		//}
-	}
-	
-	/** Refresh size of videoview and it's parent view*/
-	public void refreshSVLayout() {
 		//CMN.Log("----refreshSVLayout", getScreenRotation());
 		//if(!suspensed)
 		{
 			int screenRotation = this.screenRotation;
 			cameraManager.screenRotation = screenRotation;
-			float scaleX=1;
-			float scaleY=1;
-			if (screenRotation == Surface.ROTATION_180) {
-				scaleX = scaleY = -1;
-			} else if (screenRotation == Surface.ROTATION_270) {
+			float scaleX=1, scaleY=1;
+			if (screenRotation == Surface.ROTATION_180
+				||screenRotation == Surface.ROTATION_270) {
 				scaleX = scaleY = -1;
 			}
 			UIData.previewView.setScaleX(scaleX);
 			UIData.previewView.setScaleY(scaleY);
-			CMN.Log("----refreshSVLayout", screenRotation, scaleX, scaleY);
-			
-			FrameLayout.LayoutParams targetLayoutParams = (FrameLayout.LayoutParams) UIData.previewView.getLayoutParams();
-			ViewGroup.LayoutParams params = UIData.videoSurfaceFrame.getLayoutParams();
-			targetLayoutParams.gravity= Gravity.START|Gravity.TOP;
-			targetLayoutParams.height=-1;
-			targetLayoutParams.width=-1;
-			
-			//		if(opt.isFullScreen() && opt.isFullscreenHideNavigationbar())
-			//			getWindowManager().getDefaultDisplay().getRealMetrics(dm);
-			//		else
+			//CMN.Log("----refreshSVLayout", screenRotation, scaleX, scaleY);
+			PhotoView view = UIData.photoView;
+			FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) view.getLayoutParams();
+			view.setCameraMode(isPhoto?null:cameraManager.camera);
+			params.gravity= Gravity.START|Gravity.TOP;
+			params.height=-1;
+			params.width=-1;
 			dm = context.getResources().getDisplayMetrics();
-			
-			
 			int w = dm.widthPixels;
 			int h = dm.heightPixels;
-			//int w = getWindow().getDecorView().getWidth();
-			//int h = getWindow().getDecorView().getHeight();
-			
-			//		if(!opt.isFullScreen())
-			//			h-=CMN.getStatusBarHeight(this);
-			
-			//		w-=DockerMarginR+DockerMarginL;
-			//		h-=DockerMarginT+DockerMarginB;
 			
 			float newW = w;
 			float newH = h;
-			params.width = w;
-			params.height = h;
-			pendingTransX = 0;
-			pendingTransY = 0;
-			pendingWidth = 0;
-			pendingHeight = 0;
-			pendingScale = 1;
+			float transX = 0;
+			float transY = 0;
 			pendingMatchType = -1;
-			
 			int type=Match_Auto;
-			
+			type=Match_Width;
 			switch(type){
 				case Match_Auto:
 					pendingMatchType=3;
 				case Match_Width:
 					//CMN.Log("Match_Width");
 					OUT: {
-						targetLayoutParams.width = (int) (0.5+w*1.0*mVideoWidth/mVideoVisibleWidth);
-						newH = 1.f*w*mVideoVisibleHeight/mVideoVisibleWidth;
-						float bottomPad = (mVideoVisibleHeight - mVideoHeight) * newH * 1.f/mVideoVisibleHeight;
-						newH-=bottomPad;
-						targetLayoutParams.height = (int) newH;
+						params.width = w;
+						newH = 1.f*w*height/width;
+						params.height = (int) newH;
 						if(newH<=h) {
 							if(!videoMode&&pendingMatchType==3) break OUT;
-							pendingTransY = -(newH - h + bottomPad) / 2; //targetLayoutParams.gravity = Gravity.CENTER;
 						} else {
 							if(videoMode&&pendingMatchType==3) break OUT;
-							pendingTransY = -(newH - h + bottomPad) / 2;
 						}
+						if(fitCenter)
+							transY = -(newH - h) / 2;
 						pendingMatchType=Match_Width;
 						break;
 					}
 				case Match_Height:
 					//CMN.Log("Match_Height");
-					newH = h; pendingTransY = 0;
-					//bottomPad = 1.f*(mVideoVisibleHeight - mVideoHeight)*dm.density  * newH /mVideoVisibleHeight;
-					//targetLayoutParams.height = (int) (h - bottomPad);
-					targetLayoutParams.height = (int) (0.5+h*1.0*mVideoHeight/mVideoVisibleHeight);
-					newW = 1.f * newH * mVideoVisibleWidth / mVideoVisibleHeight;
-					float rightPad = (mVideoVisibleWidth - mVideoWidth) * newW * 1.f / mVideoVisibleWidth;
-					newW-=rightPad;
-					targetLayoutParams.width = (int) newW;
-					if(newW<w){
-						pendingTransX = -(newW - w) / 2;//targetLayoutParams.gravity=Gravity.TOP|Gravity.CENTER;
-					}else {
-						pendingTransX = -(newW - w) / 2;
-					}
+					newH = h; transY = 0;
+					params.height = h;
+					newW = 1.f * newH * width / height;
+					params.width = (int) newW;
+					if(fitCenter)
+						transX = -(newW - w) / 2;
 					pendingMatchType=Match_Height;
 					break;
 				case Match_None:
 					break;
 			}
-			UIData.surfaceHolder.setLayoutParams(targetLayoutParams);
-			UIData.surfaceHolder.setTranslationX(pendingTransX);
-			UIData.surfaceHolder.setTranslationY(pendingTransY);
+			view.setLayoutParams(params);
+			view.setTranslationX(transX);
+			view.setTranslationY(transY);
+			view.setScaleX(1);
+			view.setScaleY(1);
 			//vTranslate.set(pendingTransX, pendingTransY);
-			pendingWidth=targetLayoutParams.width;
-			pendingHeight=targetLayoutParams.height;
-			//sWidth=targetLayoutParams.width;
-			//sHeight=targetLayoutParams.height;
-			//scale=1;
-			sWidth=mVideoWidth;
-			sHeight=mVideoHeight;
-			pendingScale=dMan.fitScale=targetLayoutParams.width*1.0f/mVideoWidth;
-			
-			UIData.videoSurfaceFrame.setLayoutParams(params);
+			sWidth=width;
+			sHeight=height;
+			dMan.fitScale=params.width*1.0f/width;
+		}
+		mVideoWidthReq=false;
+		//}
+	}
+	
+	void applyPreviewSize() {
+		if(cameraManager.parameters!=null) {
+			Camera.Size previewSize = cameraManager.parameters.getPreviewSize();
+			fitPreview(previewSize.width, previewSize.height, true, true, false);
+			UIData.imageView.setVisibility(View.GONE);
+		}
+	}
+	
+	void applyImageSize(boolean fitCenter) {
+		if(bitmap!=null) {
+			fitPreview(bitmap.getWidth(), bitmap.getHeight(), false, fitCenter, true);
+			UIData.imageView.setVisibility(View.VISIBLE);
 		}
 	}
 	
@@ -742,22 +785,34 @@ public class Manager implements View.OnClickListener {
 	}
 	
 	Bitmap bitmap;
+	RectF imgTranslate;
 	
 	public void openImage(Uri data) {
+		Bitmap bitmap = null;
 		try {
 			suspensed = true;
 			pauseCamera();
-			//bitmap = decodeBitmap(context, data, DEFAULT_REQ_WIDTH, DEFAULT_REQ_HEIGHT);
 			bitmap = decodeBitmap(context, data, -1, -1);
-			UIData.imageView.setImageBitmap(bitmap);
-			onNewVideoViewLayout(false, bitmap.getWidth(), bitmap.getHeight());
-			UIData.frameView.setOutsideTouchMode(1);
-			setFramingRect(getFramingRect(true));
-			UIData.toast.setVisibility(View.VISIBLE);
-			UIData.cameraBtn.setVisibility(View.GONE);
-			UIData.playBtn.setVisibility(View.VISIBLE);
-			hasStaticImg = true;
-		} catch (IOException ignored) { }
+			//bitmap = decodeBitmap(context, data, DEFAULT_REQ_WIDTH, DEFAULT_REQ_HEIGHT);
+		} catch (Exception e) {
+			//CMN.Log(e);
+		}
+		if(bitmap!=null) {
+			setImage(bitmap, false);
+		}
+	}
+	
+	private void setImage(Bitmap bitmap, boolean center) {
+		this.bitmap = bitmap;
+		UIData.imageView.setImageBitmap(bitmap);
+		applyImageSize(center);
+		//UIData.imageView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+		UIData.frameView.setOutsideTouchMode(1);
+		setRect(getFramingRect(true));
+		UIData.toast.setVisibility(View.VISIBLE);
+		UIData.cameraBtn.setVisibility(View.GONE);
+		UIData.playBtn.setVisibility(View.VISIBLE);
+		viewingImg = true;
 	}
 	
 	public static final int DEFAULT_REQ_WIDTH = 450;
@@ -811,7 +866,7 @@ public class Manager implements View.OnClickListener {
 		return framingRect;
 	}
 	
-	public void setFramingRect(RectF rect) {
+	public void setRect(RectF rect) {
 		framingRect = rect;
 		dMan.framingRect = framingRect;
 	}

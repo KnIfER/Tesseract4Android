@@ -56,13 +56,15 @@ public class DecodeManager {
 	public Result decodeOCR(byte[] data, int sWidth, int sHeight) {
 		RectF rect = framingRect;
 		// 源图像显示后的缩放比，比如0.5、0.9
-		FrameLayout view = mManager.UIData.surfaceHolder;
-		float scale = fitScale * view.getScaleX();
+		FrameLayout view = mManager.UIData.photoView;
+		float scale = fitScale * 1;//view.getScaleX();
 		int left=(int)((rect.left - view.getTranslationX())/scale);
 		int top=(int)((rect.top - view.getTranslationY())/scale);
 		
 		int widthwidth=(int)(rect.width()/scale);
 		int heightheight=(int)(rect.height()/scale);
+//		flipX = true;
+//		flipY = true;
 		
 		if(flipX) { // x轴是经过翻转的
 			left = sWidth - left - widthwidth;
@@ -153,7 +155,7 @@ public class DecodeManager {
 				ArrayList<Rect> rects = words.getBoxRects();
 				words.recycle();
 				Manager m = mManager;
-				m.UIData.frameView.possibleTextRects = rects;
+				m.UIData.frameView.textRects = rects;
 //				m.UIData.qrFrame.postInvalidate();
 				int cX=widthwidth/2, cY=heightheight/2, dist=Integer.MAX_VALUE, boxIdx=-1, boxDist;
 				boolean aggressive=false;
@@ -220,19 +222,34 @@ public class DecodeManager {
 		return null;
 	}
 	
-	long lastImageId;
+	static class LastTessImage{
+		//Bitmap bm;
+		long id;
+		Rect rect=new Rect();
+		ArrayList<Rect> words;
+		ArrayList<Rect> words1;
+	}
+	
+	final LastTessImage lastImg = new LastTessImage();
+	
 	/** Set OCR Image */
 	private void setImage(byte[] data, int w, int h, int bpp, int bpl) {
 		//getTess().stop();
 		getTess().setImage(data, w, h, bpp, bpl);
-		if(lastImageId!=0) lastImageId=0;
+		if(lastImg.id!=0) {
+			lastImg.id=0;
+			lastImg.words=null;
+			lastImg.words1=null;
+		}
 	}
 	
 	/** Set OCR Image */
 	private void setImage(Bitmap bitmap) {
-		if(lastImageId!=CMN.id(bitmap)) {
+		if(lastImg.id!=CMN.id(bitmap)) {
 			getTess().setImage(bitmap);
-			lastImageId=CMN.id(bitmap);
+			lastImg.id=CMN.id(bitmap);
+			lastImg.words=null;
+			lastImg.words1=null;
 		}
 	}
 	
@@ -240,7 +257,7 @@ public class DecodeManager {
 		if(tess==null) {
 			tess = new TessBaseAPI();
 			CMN.rt();
-			tess.init(null, "eng+chi_sim"); //chi_sim
+			tess.init(null, "eng+chi_sim"); //chi_sim +chi_sim
 			CMN.pt("初始化1::");CMN.rt();
 //					tess = new TessBaseAPI();
 //					tess.init(null, "eng+chi_sim"); //chi_sim
@@ -262,33 +279,105 @@ public class DecodeManager {
 		flipX = flipY = screenRotation==Surface.ROTATION_180||screenRotation==Surface.ROTATION_270;
 	}
 	
+	void decodeWord() {
+		Bitmap bitmap = mManager.bitmap;
+		int sWidth=bitmap.getWidth();
+		int sHeight=bitmap.getHeight();
+		int left, top, widthwidth, heightheight;
+		FrameLayout view = mManager.UIData.photoView;
+		float scale = fitScale * view.getScaleX();
+		boolean crop=mManager.UIData.frameView.isCropping();
+		if(crop) {
+			RectF rect = framingRect;
+			left=(int)((rect.left - view.getTranslationX())/scale);
+			top=(int)((rect.top - view.getTranslationY())/scale);
+			widthwidth=(int)(rect.width()/scale);
+			heightheight=(int)(rect.height()/scale);
+			if(left<0) left=0; if(top<0) top=0;
+			if(widthwidth+left>=sWidth) widthwidth=sWidth-1-left;
+			if(heightheight+top>=sHeight) heightheight=sHeight-1-top;
+		} else {
+			left = top = 0;
+			widthwidth = sWidth-1;
+			heightheight = sHeight-1;
+		}
+		if(widthwidth<=0||heightheight<=0) {
+			return;
+		}
+		
+		//tess.stop();
+		setImage(bitmap);
+		ArrayList<Rect> rects = crop?lastImg.words:lastImg.words1;
+		if(rects!=null && crop && !lastImg.rect.contains(left, top, widthwidth, heightheight)) {
+			lastImg.words=null;
+		}
+		if(rects==null) {
+			tess.setRectangle(left, top, widthwidth, heightheight);
+			rects = tess.getWords().getBoxRects();
+			if(crop) {
+				lastImg.words=rects;
+				lastImg.rect.set(left, top, widthwidth, heightheight);
+			} else {
+				lastImg.words1=rects;
+			}
+		}
+		
+		int cX=(int) ((mManager.UIData.frameView.lastX-view.getTranslationX())/scale)-left
+				, cY=(int)((mManager.UIData.frameView.lastY-view.getTranslationY())/scale)-top
+				, boxIdx=-1;
+		Rect rc;
+		for (int i = 0; i < rects.size(); i++) {
+			rc = rects.get(i);
+			if(rc.contains(cX, cY) && rc.width()*rc.height()<500*500) {
+				boxIdx = i;
+				//break;
+			}
+		}
+		if (boxIdx>=0) {
+			rc=rects.get(boxIdx);
+			mManager.UIData.frameView.setTextRect(rc);
+			final int pad = 20;
+			int wordWidth = rc.width()+pad*2;
+			int wordHeight = rc.height()+pad*2;
+			int wordLeft = rc.left-pad;
+			int wordTop = rc.top-pad;
+			if(wordLeft<0) wordLeft=0; if(wordTop<0) wordTop=0;
+			if(wordLeft+wordWidth>=widthwidth) wordWidth=widthwidth-wordLeft-1;
+			if(wordTop+wordHeight>=heightheight) wordHeight=heightheight-wordTop-1;
+			if(wordWidth>0 && wordHeight>0) {
+				tess.setRectangle(wordLeft+left, wordTop+top, wordWidth, wordHeight);
+				//tess.getHOCRText(0);
+				Result res = new Result(tess.getUTF8Text(), null, null, BarcodeFormat.QR_CODE);
+				mManager.onDecodeSuccess(res);
+			}
+		} else {
+			mManager.UIData.frameView.setTextRect(null);
+		}
+	}
+	
 	private void decodeBitmap(Bitmap bitmap) {
 		int sWidth=bitmap.getWidth();
 		int sHeight=bitmap.getHeight();
 		int left, top, widthwidth, heightheight;
 		if(mManager.UIData.frameView.isCropping()) {
 			RectF rect = framingRect;
-			FrameLayout view = mManager.UIData.surfaceHolder;
+			FrameLayout view = mManager.UIData.photoView;
 			float scale = fitScale * view.getScaleX();
 			left=(int)((rect.left - view.getTranslationX())/scale);
 			top=(int)((rect.top - view.getTranslationY())/scale);
 			widthwidth=(int)(rect.width()/scale);
 			heightheight=(int)(rect.height()/scale);
-			if(left<0) left=0;
-			if(widthwidth+left>=sWidth) {
-				widthwidth=sWidth-1-left;
-			}
-			if(top<0) top=0;
-			if(heightheight+top>=sHeight) {
-				heightheight=sHeight-1-top;
-			}
-			if(widthwidth<=0||heightheight<=0) {
-				return;
-			}
+			if(left<0) left=0; if(top<0) top=0;
+			if(widthwidth+left>=sWidth) widthwidth=sWidth-1-left;
+			if(heightheight+top>=sHeight) heightheight=sHeight-1-top;
 		} else {
 			left = top = 0;
 			widthwidth = sWidth-1;
 			heightheight = sHeight-1;
+		}
+		CMN.Log("decodeBitmap::", widthwidth, heightheight);
+		if(widthwidth<=0||heightheight<=0) {
+			return;
 		}
 		Result res = null;
 		CMN.Log("decodeBitmap::", decodeType, sWidth, sHeight, "rc=", left, top, widthwidth, heightheight);
@@ -362,18 +451,26 @@ public class DecodeManager {
 		RectF rect = framingRect;
 		// Go ahead and assume it's YUV rather than die.
 		//if(true) return new PlanarYUVLuminanceSource(data, sWidth, sHeight, 0, 0, sWidth, sHeight, false);
-		//CMN.Log("buildLuminanceSource", width, height, rect.left, rect.top, rect.width(), rect.height());
+		//CMN.Log("buildLuminanceSource", sWidth, sHeight, rect.left, rect.top, rect.width(), rect.height());
 		//CMN.Log("scale="+a.scale, "trans="+a.vTranslate);
 		
 		// 源图像显示后的缩放比，比如0.5、0.9
-		FrameLayout view = mManager.UIData.surfaceHolder;
-		float scale = fitScale * view.getScaleX();
+		FrameLayout view = mManager.UIData.photoView;
+		float scale = fitScale * 1;//view.getScaleX();
 		int left=(int)((rect.left - view.getTranslationX())/scale);
 		int top=(int)((rect.top - view.getTranslationY())/scale);
-		//CMN.Log("getScaleX::", a.surfaceView.getScaleX(), a.surfaceView.getScaleY());
+		//CMN.Log("getScaleX::", view.getScaleX(), view.getScaleY());
 		
 		int widthwidth=(int)(rect.width()/scale);
 		int heightheight=(int)(rect.height()/scale);
+		
+//		left=top=0;
+//		widthwidth=sWidth;
+//		heightheight=sHeight;
+
+//		flipX = true;
+//		flipY = true;
+		
 		if(flipX) { // x轴是经过翻转的
 			left = sWidth - left - widthwidth;
 		}
@@ -443,9 +540,9 @@ public class DecodeManager {
 		Manager m = mManager;
 		int width=m.sWidth;
 		int height=m.sHeight;
-		//CMN.rt();
+		CMN.rt();
 		Result rawResult = null;
-		//CMN.Log("decode……", CMN.id(data));
+		//CMN.Log("decode data……", decodeType, CMN.id(data));
 		if(decodeType==0) {
 			// 测试OCR插件！！！
 			try {
@@ -458,7 +555,7 @@ public class DecodeManager {
 			try {
 				rawResult = decodeQR(data, width, height, false, false); //不旋转
 			} catch (Exception e) {// continue
-				//CMN.Log(e);
+				CMN.Log(e);
 			}
 			Options opt=m.opt;
 			if(rawResult==null && opt.getTryAgainWithInverted()) {
@@ -518,6 +615,8 @@ public class DecodeManager {
 			DecodeManager d = m.dMan;
 			if(msg.arg1==R.id.decode2) {
 				d.decodeBitmap((Bitmap) msg.obj);
+			} else if(msg.arg1==R.id.decode3){
+				d.decodeWord();
 			} else {
 				d.decode((byte[]) msg.obj);
 			}

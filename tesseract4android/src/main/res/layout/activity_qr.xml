@@ -7,23 +7,24 @@
 		android:id="@+id/video_surface_frame"
 		android:layout_width="match_parent"
 		android:layout_height="match_parent"
+		android:background="#000"
 		>
-		<FrameLayout
-			android:id="@+id/surface_holder"
+		<TextureView
+			android:id="@+id/preview_view"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			/>
+		<com.googlecode.tesseraction.PhotoView
+			android:id="@+id/photo_view"
 			android:layout_width="match_parent"
 			android:layout_height="match_parent"
 			>
-			<TextureView
-				android:id="@+id/preview_view"
-				android:layout_width="match_parent"
-				android:layout_height="match_parent"
-				/>
 			<ImageView
 				android:id="@+id/imageView"
 				android:layout_width="match_parent"
 				android:layout_height="match_parent"
 				/>
-		</FrameLayout>
+		</com.googlecode.tesseraction.PhotoView>
 		<com.googlecode.tesseraction.CropView
 			android:id="@+id/frame_view"
 			android:layout_width="fill_parent"
@@ -31,7 +32,7 @@
 			android:background="#60000000" />
 	</FrameLayout>
 
-	<LinearLayout
+	<com.googlecode.tesseraction.GradList
 		android:id="@+id/toolbar_content"
 		android:layout_width="match_parent"
 		android:layout_height="65dp"
@@ -53,7 +54,7 @@
 			android:layout_width="0dp"
 			android:layout_height="match_parent"
 			android:layout_weight="1"
-			android:textColor="#9fffffff"
+			android:textColor="#f0ffffff"
 			android:textSize="20sp"
 			android:text="OCR"
 			android:gravity="center_vertical"
@@ -85,7 +86,7 @@
 			style="@style/QRActionBarItem"
 			/>
 
-	</LinearLayout>
+	</com.googlecode.tesseraction.GradList>
 
 	<View
 		android:layout_width="match_parent"
@@ -110,8 +111,6 @@
 			android:orientation="horizontal"
 			android:divider="@drawable/divider2"
 			android:showDividers="middle"
-			android:paddingStart="58dp"
-			android:paddingEnd="58dp"
 			android:clipChildren="false"
 			android:clipToPadding="false"
 			>
@@ -141,6 +140,26 @@
 				android:layout_height="match_parent"
 				android:background="@drawable/item_selector_circle1"
 				android:src="@drawable/ic_baseline_play_arrow_24"
+				android:clickable="true"
+				android:tint="#3B7DB1"
+				android:padding="10dp"
+				/>
+			<android.widget.ImageView
+				android:id="@+id/rectsBtn"
+				android:layout_width= "60dp"
+				android:layout_height="match_parent"
+				android:background="@drawable/item_selector_circle1"
+				android:src="@drawable/ic_rects"
+				android:clickable="true"
+				android:tint="#3B7DB1"
+				android:padding="10dp"
+				/>
+			<android.widget.ImageView
+				android:id="@+id/laserBtn"
+				android:layout_width= "60dp"
+				android:layout_height="match_parent"
+				android:background="@drawable/item_selector_circle1"
+				android:src="@drawable/ic_baseline_qr_code_scanner_24"
 				android:clickable="true"
 				android:tint="#3B7DB1"
 				android:padding="10dp"

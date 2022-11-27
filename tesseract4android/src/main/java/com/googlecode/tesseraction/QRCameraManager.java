@@ -81,7 +81,7 @@ public final class QRCameraManager implements SensorEventListener {
 	public Point cameraResolution = new Point();
 	
 	/** 摄像机参数 */
-	private Camera.Parameters parameters;
+	Camera.Parameters parameters;
 	
 	public QRCameraManager(Manager manager) {
 		this.mManager=manager;
@@ -149,9 +149,8 @@ public final class QRCameraManager implements SensorEventListener {
 				}
 			}
 		}
-		Camera.Size previewSize = parameters.getPreviewSize();
 		ContinuousFocusing = mManager.opt.getContinuousFocus() && getContinuousFocusing(parameters.getFocusMode());
-		mManager.onNewVideoViewLayout(true, previewSize.width, previewSize.height);
+		mManager.applyPreviewSize();
 		decorateCameraSettings();
 		imageListener.ready();
 	}
@@ -169,11 +168,11 @@ public final class QRCameraManager implements SensorEventListener {
 			//setBestPreviewFPS(params);
 			//setBarcodeSceneMode(params);
 			decor_camera.setParameters(params);
-			if(!previewing) {
-				// it's a feature!
-				decor_camera.startPreview();
-				decor_camera.stopPreview();
-			}
+//			if(!previewing) {
+//				// it's a feature!
+//				decor_camera.startPreview();
+//				decor_camera.stopPreview();
+//			}
 		}
 	}
 	
@@ -189,6 +188,7 @@ public final class QRCameraManager implements SensorEventListener {
 		
 		//parameters.setPreviewFormat(ImageFormat.JPEG);
 		
+		parameters.setRotation(90);
 		
 		parameters.setPreviewSize(cameraResolution.x, cameraResolution.y);
 		//CMN.Log("setPreviewSize==", cameraResolution.x+"x"+cameraResolution.y);
@@ -273,7 +273,6 @@ public final class QRCameraManager implements SensorEventListener {
 	/** A single preview frame will be returned to the handler supplied. The data will arrive as byte[] in the message.obj field */
 	public synchronized void requestPreviewFrame() {
 		if (previewing && realtime && camera!=null) {
-			//CMN.Log("setOneShotPreviewCallback", handler);
 			camera.setOneShotPreviewCallback(imageListener.ready(mManager.handler));
 		}
 	}
@@ -419,7 +418,7 @@ public final class QRCameraManager implements SensorEventListener {
 				message.arg1=0;
 				//CMN.Log("data_sent::", CMN.id(data));
 				message.sendToTarget();
-				previewHandler = null;
+				//previewHandler = null;
 			} else {
 				CMN.Log("Got preview callback, but no handler or resolution available");
 			}

@@ -140,6 +140,13 @@ public /*final*/ class QRActivity extends Activity {
 		mManager.onDestroy();
 	}
 	
+	@Override
+	public void onBackPressed() {
+		if(mManager.onBack()) {
+			return;
+		}
+		super.onBackPressed();
+	}
 	
 	private void showT(String text) {
 		Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
