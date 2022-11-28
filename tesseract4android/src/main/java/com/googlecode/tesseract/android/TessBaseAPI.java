@@ -50,7 +50,7 @@ public class TessBaseAPI {
 	/**
 	 * Used by the native implementation of the class.
 	 */
-	private long mNativeData;
+	 long mNativeData;
 
 	static {
 		System.loadLibrary("jpeg");
@@ -62,7 +62,7 @@ public class TessBaseAPI {
 		nativeClassInit();
 	}
 
-	private static final String TAG = TessBaseAPI.class.getSimpleName();
+	 static final String TAG = TessBaseAPI.class.getSimpleName();
 
 	/**
 	 * Page segmentation mode.
@@ -237,9 +237,9 @@ public class TessBaseAPI {
 		public static final int RIL_SYMBOL = 4;
 	}
 
-	private ProgressNotifier progressNotifier;
+	 ProgressNotifier progressNotifier;
 
-	private boolean mRecycled;
+	 boolean mRecycled;
 
 	/**
 	 * Interface that may be implemented by calling object in order to receive
@@ -255,9 +255,9 @@ public class TessBaseAPI {
 	 * Represents values indicating recognition progress and status.
 	 */
 	public class ProgressValues {
-		private final int percent;
-		private final Rect wordRect;
-		private final Rect textRect;
+		 final int percent;
+		 final Rect wordRect;
+		 final Rect textRect;
 
 		public ProgressValues(int percent, Rect wordRect, Rect textRect) {
 			this.percent = percent;
@@ -1054,84 +1054,84 @@ public class TessBaseAPI {
 	/**
 	 * Initializes static native data. Must be called on object load.
 	 */
-	private static native void nativeClassInit();
+	 static native void nativeClassInit();
 
 	/**
 	 * Initializes native data. Must be called on object construction.
 	 */
-	private native long nativeConstruct();
+	 native long nativeConstruct();
 
 	/**
 	 * Calls End() and finalizes native data. Must be called on object destruction.
 	 */
-	private native void nativeRecycle(long mNativeData);
+	 native void nativeRecycle(long mNativeData);
 
-	private native boolean nativeInit(long mNativeData, String datapath, String language);
+	 native boolean nativeInit(long mNativeData, String datapath, String language);
 
-	private native boolean nativeInitOem(long mNativeData, String datapath, String language, int mode);
+	 native boolean nativeInitOem(long mNativeData, String datapath, String language, int mode);
 
-	private native boolean nativeInitParams(long mNativeData, String datapath, String language,
+	 native boolean nativeInitParams(long mNativeData, String datapath, String language,
 											int mode, String[] vars, String[] varsValues);
 
-	private native String nativeGetInitLanguagesAsString(long mNativeData);
+	 native String nativeGetInitLanguagesAsString(long mNativeData);
 
-	private native void nativeClear(long mNativeData);
+	 native void nativeClear(long mNativeData);
 
-	private native void nativeSetImageBytes(
+	 native void nativeSetImageBytes(
 			long mNativeData, byte[] imagedata, int width, int height, int bpp, int bpl);
 
-	private native void nativeSetImagePix(long mNativeData, long nativePix);
+	 native void nativeSetImagePix(long mNativeData, long nativePix);
 
-	private native void nativeSetRectangle(long mNativeData, int left, int top, int width, int height);
+	 native void nativeSetRectangle(long mNativeData, int left, int top, int width, int height);
 
-	private native String nativeGetUTF8Text(long mNativeData);
+	 native String nativeGetUTF8Text(long mNativeData);
 
-	private native int nativeMeanConfidence(long mNativeData);
+	 native int nativeMeanConfidence(long mNativeData);
 
-	private native int[] nativeWordConfidences(long mNativeData);
+	 native int[] nativeWordConfidences(long mNativeData);
 
-	private native String nativeGetVariable(long mNativeData, String var);
+	 native String nativeGetVariable(long mNativeData, String var);
 
-	private native boolean nativeSetVariable(long mNativeData, String var, String value);
+	 native boolean nativeSetVariable(long mNativeData, String var, String value);
 
-	private native void nativeSetDebug(long mNativeData, boolean debug);
+	 native void nativeSetDebug(long mNativeData, boolean debug);
 
 	@PageSegMode.Mode
-	private native int nativeGetPageSegMode(long mNativeData);
+	 native int nativeGetPageSegMode(long mNativeData);
 
-	private native void nativeSetPageSegMode(long mNativeData, int mode);
+	 native void nativeSetPageSegMode(long mNativeData, int mode);
 
-	private native long nativeGetThresholdedImage(long mNativeData);
+	 native long nativeGetThresholdedImage(long mNativeData);
 
-	private native long nativeGetRegions(long mNativeData);
+	 native long nativeGetRegions(long mNativeData);
 
-	private native long nativeGetTextlines(long mNativeData);
+	 native long nativeGetTextlines(long mNativeData);
 
-	private native long nativeGetStrips(long mNativeData);
+	 native long nativeGetStrips(long mNativeData);
 
-	private native long nativeGetWords(long mNativeData);
+	 native long nativeGetWords(long mNativeData);
 
-	private native long nativeGetConnectedComponents(long mNativeData);
+	 native long nativeGetConnectedComponents(long mNativeData);
 
-	private native long nativeGetResultIterator(long mNativeData);
+	 native long nativeGetResultIterator(long mNativeData);
 
-	private native String nativeGetBoxText(long mNativeData, int page_number);
+	 native String nativeGetBoxText(long mNativeData, int page_number);
 
-	private native String nativeGetHOCRText(long mNativeData, int page_number);
+	 native String nativeGetHOCRText(long mNativeData, int page_number);
 
-	private native void nativeSetInputName(long mNativeData, String name);
+	 native void nativeSetInputName(long mNativeData, String name);
 
-	private native void nativeSetOutputName(long mNativeData, String name);
+	 native void nativeSetOutputName(long mNativeData, String name);
 
-	private native void nativeReadConfigFile(long mNativeData, String fileName);
+	 native void nativeReadConfigFile(long mNativeData, String fileName);
 
-	private native String nativeGetVersion(long mNativeData);
+	 native String nativeGetVersion(long mNativeData);
 
-	private native void nativeStop(long mNativeData);
+	 native void nativeStop(long mNativeData);
 
-	private native boolean nativeBeginDocument(long rendererPointer, String title);
+	 native boolean nativeBeginDocument(long rendererPointer, String title);
 
-	private native boolean nativeEndDocument(long rendererPointer);
+	 native boolean nativeEndDocument(long rendererPointer);
 
-	private native boolean nativeAddPageToDocument(long mNativeData, long nativePix, String imagePath, long rendererPointer);
+	 native boolean nativeAddPageToDocument(long mNativeData, long nativePix, String imagePath, long rendererPointer);
 }

@@ -1357,6 +1357,9 @@ char *TessBaseAPI::GetUTF8Text() {
     if (it->Empty(RIL_PARA)) {
       continue;
     }
+//    if (it->Confidence(RIL_PARA)<45) {
+//      continue;
+//    }
     const std::unique_ptr<const char[]> para_text(it->GetUTF8Text(RIL_PARA));
     text += para_text.get();
   } while (it->Next(RIL_PARA));

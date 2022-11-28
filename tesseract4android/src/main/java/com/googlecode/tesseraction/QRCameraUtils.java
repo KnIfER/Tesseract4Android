@@ -227,7 +227,7 @@ public final class QRCameraUtils {
 	public static void findBestPreviewSizeValue(Camera.Parameters parameters, Point cameraResolution, Point screenResolution) {
 		List<Camera.Size> rawSupportedSizes = parameters.getSupportedPreviewSizes();
 		if (rawSupportedSizes == null) {
-			//CMN.Log("Device returned no supported preview sizes; using default");
+			CMN.Log("Device returned no supported preview sizes; using default");
 			Camera.Size defaultSize = parameters.getPreviewSize();
 			cameraResolution.set(defaultSize.width, defaultSize.height);
 			return;
@@ -242,9 +242,13 @@ public final class QRCameraUtils {
 		// Remove sizes that are unsuitable
 		Iterator<Camera.Size> it = supportedPreviewSizes.iterator();
 		while (it.hasNext()) {
+			
 			Camera.Size supportedPreviewSize = it.next();
 			int realWidth = supportedPreviewSize.width;
 			int realHeight = supportedPreviewSize.height;
+			
+			CMN.Log("findBestPreviewSizeValue::", realWidth, realHeight);
+			
 			if (realWidth * realHeight < MIN_PREVIEW_PIXELS) {
 				it.remove();
 				continue;
@@ -265,6 +269,15 @@ public final class QRCameraUtils {
 				//CMN.Log("Found preview size exactly matching screen size: " + exactPoint);
 				return;
 			}
+		}
+		
+		if (true) {
+			// 1920, 1088,
+			// 1920, 1080,
+			// 1600, 1200,
+			// 1440, 1080,
+			cameraResolution.set(1600, 1200);
+			return;
 		}
 
 		// If no exact match, use largest preview size. This was not a great

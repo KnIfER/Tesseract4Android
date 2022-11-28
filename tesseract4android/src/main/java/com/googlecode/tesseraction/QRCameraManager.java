@@ -289,7 +289,8 @@ public final class QRCameraManager implements SensorEventListener {
 	}
 	
 	public void resumeSensor() {
-		if(!ContinuousFocusing && mManager.opt.getSensorAutoFocus()) {
+		CMN.Log("resumeSensor::", mManager.opt.getSensorAutoFocus());
+		if(/*!ContinuousFocusing && */mManager.opt.getSensorAutoFocus()) {
 			registeredSensorListener=true;
 			sensorManager.registerListener(this, directionSensor, SensorManager.SENSOR_DELAY_NORMAL);
 		}
@@ -304,10 +305,11 @@ public final class QRCameraManager implements SensorEventListener {
 	
 	@Override
 	public void onSensorChanged(SensorEvent event) {
+		//CMN.Log("onSensorChanged::");
 		//CMN.Log("onSensorChanged");
-		if(ContinuousFocusing) {
+		/*if(ContinuousFocusing) {
 			pauseSensor();
-		} else if(camera!=null && !focusing) {
+		} else */if(camera!=null) {
 			float x = event.values[0];
 			float y = event.values[1];
 			float z = event.values[2];
@@ -315,11 +317,21 @@ public final class QRCameraManager implements SensorEventListener {
 			if ((Math.abs(mLastX - x) > theta || Math.abs(mLastY - y) > theta || Math.abs(mLastZ - z) > theta)) {
 				//CMN.Log("onSensorChanged");
 				
-				autoFocus();
+				if (!focusing) {
+					autoFocus();
+				}
 				
 				mLastX = x;
 				mLastY = y;
 				mLastZ = z;
+
+				try {
+					CMN.Log("中断解析……");
+					mManager.dMan.tess.stop();
+					CMN.Log("中断解析成功");
+				} catch (Exception e) {
+					CMN.Log(e);
+				}
 			}
 		}
 	}
@@ -416,6 +428,11 @@ public final class QRCameraManager implements SensorEventListener {
 			if (previewHandler != null) {
 				Message message = previewHandler.obtainMessage(R.id.decode, data);
 				message.arg1=0;
+//				try {
+//					mManager.dMan.tess.stop();
+//				} catch (Exception e) {
+//					CMN.Log(e);
+//				}
 				//CMN.Log("data_sent::", CMN.id(data));
 				message.sendToTarget();
 				//previewHandler = null;

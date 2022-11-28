@@ -8,6 +8,7 @@ import java.util.Arrays;
 //common
 public class CMN {
 	public static String Log(Object... o) {
+		if(0==o.length) return null;
 		StringBuilder msg = new StringBuilder(1024);
 		for (int i = 0; i < o.length; i++) {
 			Object o1 = o[i];

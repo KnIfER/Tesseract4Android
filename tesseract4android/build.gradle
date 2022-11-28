@@ -24,6 +24,10 @@ android {
                 //cppFlags "-O"
                 //cFlags "-fopenmp"
                 //cppFlags "-fopenmp"
+
+//                arguments "-DANDROID_ARM_NEON=ON"
+                cFlags "-fopenmp -static-openmp -Wno-unused-command-line-argument"
+                cppFlags "-fopenmp -static-openmp -Wno-unused-command-line-argument"
 			}
 		}
 		ndk {

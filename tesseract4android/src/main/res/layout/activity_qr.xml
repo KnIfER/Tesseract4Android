@@ -9,16 +9,16 @@
 		android:layout_height="match_parent"
 		android:background="#000"
 		>
-		<TextureView
-			android:id="@+id/preview_view"
-			android:layout_width="match_parent"
-			android:layout_height="match_parent"
-			/>
 		<com.googlecode.tesseraction.PhotoView
 			android:id="@+id/photo_view"
 			android:layout_width="match_parent"
 			android:layout_height="match_parent"
 			>
+			<TextureView
+				android:id="@+id/preview_view"
+				android:layout_width="match_parent"
+				android:layout_height="match_parent"
+				/>
 			<ImageView
 				android:id="@+id/imageView"
 				android:layout_width="match_parent"

@@ -6,6 +6,7 @@ import android.graphics.RectF;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.text.TextUtils;
 import android.view.Surface;
 import android.widget.FrameLayout;
 
@@ -208,8 +209,11 @@ public class DecodeManager {
 //				setImage(wordData, wordWidth, wordHeight, 1, wordWidth);
 				if(wordWidth>0 && wordHeight>0) {
 					tess.setRectangle(left, top, wordWidth, wordHeight);
-					//tess.getHOCRText(0);
-					return new Result(tess.getUTF8Text(), null, null, BarcodeFormat.QR_CODE);
+					String hoc = tess.getHOCRText(0);
+					String utf8 = tess.getUTF8Text();
+					if (!TextUtils.isEmpty(utf8)) {
+						return new Result(utf8, null, null, BarcodeFormat.QR_CODE);
+					}
 				}
 			}
 			else {
@@ -257,7 +261,7 @@ public class DecodeManager {
 		if(tess==null) {
 			tess = new TessBaseAPI();
 			CMN.rt();
-			tess.init(null, "eng+chi_sim"); //chi_sim +chi_sim
+			tess.init(null, "chi_sim+eng"); //chi_sim +chi_sim
 			CMN.pt("初始化1::");CMN.rt();
 //					tess = new TessBaseAPI();
 //					tess.init(null, "eng+chi_sim"); //chi_sim
