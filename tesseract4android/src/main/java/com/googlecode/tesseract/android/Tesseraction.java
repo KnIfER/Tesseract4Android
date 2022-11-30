@@ -1,7 +1,12 @@
 package com.googlecode.tesseract.android;
 
+import android.app.Activity;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
+import android.net.Uri;
 
 import androidx.annotation.WorkerThread;
 
@@ -21,8 +26,11 @@ import com.googlecode.leptonica.android.Pix;
 import com.googlecode.leptonica.android.Pixa;
 import com.googlecode.leptonica.android.ReadFile;
 import com.googlecode.tesseraction.CMN;
+import com.googlecode.tesseraction.PluginFileProvider;
+import com.googlecode.tesseraction.Utils;
 
 import java.lang.ref.WeakReference;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -36,11 +44,36 @@ public class Tesseraction {
 	EnumSet<BarcodeFormat> decodeFormats;
 	Map<DecodeHintType,Object> hints;
 	
-	public void initTessdata(String path, String languages) {
-		if (tess == null) {
-			tess = new TessBaseAPI();
+	public boolean initTessdata(Context pluginContext, Activity host, String path, String languages) {
+		try {
+			if (tess == null) {
+				tess = new TessBaseAPI();
+			}
+			if (Utils.contentResolver == null) {
+				Utils.pluinHost = host.getPackageName();
+				Utils.contentResolver = pluginContext.getContentResolver();
+				try {
+					Utils.contentResolver.openAssetFileDescriptor(Uri.parse(PluginFileProvider.baseUri+"test"), "rb");
+				} catch (Exception e) {
+					CMN.Log(e.getMessage());
+					CMN.Log(e);
+					try {
+						if (String.valueOf(e.getMessage()).contains("No content provider")) {
+							Intent intent = new Intent();
+							intent.setComponent(new ComponentName(pluginContext.getPackageName(), Bootstrap.class.getName()));
+							host.startActivity(intent);
+						}
+					} catch (Exception ex) {
+						CMN.Log(e);
+					}
+				}
+				//host.startActivity();
+			}
+			return tess.init(path, languages);
+		} catch (Exception e) {
+			CMN.Log(e);
 		}
-		tess.init(path, languages);
+		return false;
 	}
 	
 	public void setImage(byte[] imagedata, int width, int height, int bpp, int bpl) {
@@ -91,6 +124,12 @@ public class Tesseraction {
 		return text != null ? text.trim() : null;
 	}
 	
+	public void stop() throws InvocationTargetException, IllegalAccessException {
+		if (tess!=null && !tess.mRecycled) {
+			tess.stop();
+		}
+	}
+	
 	WeakReference<byte[]> TmpData = new WeakReference<>(null);
 	/**复用临时数据*/
 	public byte[] acquireTmpData(int size) {
@@ -105,7 +144,7 @@ public class Tesseraction {
 	}
 	public String decodeQrData(byte[] data, int sWidth, int sHeight, int left, int top
 			, int widthwidth, int heightheight, boolean rotate, boolean invert
-		, boolean rotated	) throws NotFoundException {
+		, boolean rotated	) {
 		prepareZxing();
 		// Go ahead and assume it's YUV rather than die.
 		//if(true) return new PlanarYUVLuminanceSource(data, sWidth, sHeight, 0, 0, sWidth, sHeight, false);
@@ -161,7 +200,10 @@ public class Tesseraction {
 		//source = PlanarYUVLuminanceSource(data, sWidth, sHeight, 0, 0,  sWidth, sHeight, false);
 		// try_decode_source
 		BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
-		Result ret = multiFormatReader.decodeWithState(bitmap);
+		Result ret = null;
+		try {
+			ret = multiFormatReader.decodeWithState(bitmap);
+		} catch (NotFoundException e) { }
 		return ret == null ? null : ret.getText();
 	}
 	public String decodeQrBitmap(Bitmap bitmap) {

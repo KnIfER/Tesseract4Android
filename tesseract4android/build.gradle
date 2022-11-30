@@ -1,6 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
+    lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
+    }
 	compileSdkVersion 28
 	// TODO: This is commented due to bug on JitPack.
 	//  Uncomment this when you want to build this library locally with OpenMP support
@@ -34,7 +38,8 @@ android {
 			// Specify the ABI configurations that Gradle should build and package.
 			// By default it compiles all available ABIs.
 			//abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
-			abiFilters 'armeabi-v7a'
+			abiFilters 'x86', 'armeabi-v7a', 'arm64-v8a'
+            //abiFilters 'arm64-v8a'
 		}
 	}
 	buildTypes {
@@ -46,31 +51,6 @@ android {
     buildFeatures {
         dataBinding = true
     }
-	flavorDimensions "parallelization"
-	productFlavors {
-		standard {
-		}
-		// TODO: This is commented due to bug on JitPack.
-		//  Uncomment this when you want to build this library locally with OpenMP support
-		/*openmp {
-			// Since NDK r21 is OpenMP compiled as a shared library, but due to bug it is never
-			// included in resulting APK/AAR. It will be fixed probably in NDK r23, but until then
-			// we need to use r20 which compiles OpenMP as a static library.
-			// TODO: Remove this when https://issuetracker.google.com/issues/152897016 is fixed.
-			ndkVersion "20.1.5948944"
-
-			versionNameSuffix "-openmp"
-			externalNativeBuild {
-				cmake {
-					// TODO: Remove this line when we use new NDK version that enables it by default
-					arguments "-DANDROID_ARM_NEON=ON"
-
-					cFlags "-fopenmp"
-					cppFlags "-fopenmp"
-				}
-			}
-		}*/
-	}
 	compileOptions {
 		sourceCompatibility JavaVersion.VERSION_1_8
 		targetCompatibility JavaVersion.VERSION_1_8

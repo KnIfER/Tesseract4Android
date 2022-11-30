@@ -40,6 +40,8 @@ public /*final*/ class QRActivity extends Activity {
 		mManager.init(this, this, null);
 		mManager.showMainMenu(this, 1);
 		
+		CMN.Log("Utils.pluinHost=" + Utils.pluinHost);
+		
 		//mManager.suspensed = type==0||type==2&&!mManager.opt.getRememberedLaunchCamera();
 		
 //		if(!mManager.suspensed) {

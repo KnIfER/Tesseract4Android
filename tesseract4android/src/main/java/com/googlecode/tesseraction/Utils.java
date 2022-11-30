@@ -9,6 +9,8 @@ import java.io.InputStream;
 public class Utils {
 	//public static Context context;
 	public static ContentResolver contentResolver;
+	public static String pluinHost;
+	
 	public static ParcelFileDescriptor openFileDescriptor(String name) {
 		ParcelFileDescriptor fd = null;
 		

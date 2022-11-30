@@ -63,6 +63,9 @@ public class PluginFileProvider extends ContentProvider {
 	@Override
 	public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
 		CMN.Log("PluginFileProvider::openAssetFile", uri, mode, uri.getPath());
+		if (uri.getPath().equals("/test")) {
+			return null;
+		}
 		if (uri.getPath().equals("/tessdata/chi_sim.traineddata")
 			|| uri.getPath().equals("/tessdata/eng.traineddata")) {
 			File file = new File(getContext().getExternalFilesDir(null), uri.getPath());

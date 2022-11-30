@@ -164,7 +164,7 @@ public class Manager implements View.OnClickListener {
 					}
 					MainMenuDlg.dismiss();
 				})
-				.setTitle("主菜单")
+				.setTitle("主菜单 - 本界面仅供调试使用")
 				.setCancelable(true)
 				.setNegativeButton("退出", (dialog, which) -> dialog.cancel())
 				.show();

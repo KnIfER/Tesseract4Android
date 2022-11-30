@@ -1,36 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.googlecode.tesseraction">
+    package="com.googlecode.tesseraction" >
 
-	<uses-permission android:name="android.permission.STORAGE" />
-	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
-	<uses-permission android:name="android.permission.CAMERA" />
-	<uses-permission android:name="android.permission.FLASHLIGHT" />
+    <application android:label="图文之心" >
+        <activity
+            android:name=".TestActivity"
+            android:exported="true" >
+        </activity>
+        <activity
+            android:name=".QRActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode|locale|layoutDirection"
+            android:theme="@style/AppTheme" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
 
-	<uses-permission android:name="android.permission.INTERNET" />
-
-	<application
-		android:label="图文之心"
-		>
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 		<activity
-			android:name=".TestActivity"
-			android:exported="true">
-		</activity>
-		<activity
-			android:name=".QRActivity"
-			android:theme="@style/AppTheme"
-			android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode|locale|layoutDirection"
+			android:name="com.googlecode.tesseract.android.Bootstrap"
+			android:exported="true"
+			android:excludeFromRecents="true"
+			android:theme="@style/FloatAppTheme"
 			>
-			<intent-filter>
-				<action android:name="android.intent.action.MAIN" />
-				<category android:name="android.intent.category.LAUNCHER" />
-			</intent-filter>
 		</activity>
+
 		<provider
-			android:name="com.googlecode.tesseraction.PluginFileProvider"
-			android:authorities="com.googlecode.tesseraction"
-			android:exported="true" >
-		</provider>
-	</application>
+            android:name="com.googlecode.tesseraction.PluginFileProvider"
+            android:authorities="com.googlecode.tesseraction"
+            android:exported="true" >
+        </provider>
+    </application>
+
 </manifest>
